@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Map Step-by-Step Navigator Pro</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS & JS for high-res image pan/zoom -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            900: '#14532d'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Map styling */
+        #map {
+            background-color: #090d16;
+            cursor: crosshair;
+        }
+
+        /* Custom SVG Marker Animation */
+        .active-step-ping {
+            animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+        @keyframes ping {
+            75%, 100% {
+                transform: scale(1.8);
+                opacity: 0;
+            }
+        }
+
+        /* Search zone pulsing effect */
+        .search-zone-pulse {
+            animation: zonePulse 2s ease-in-out infinite alternate;
+        }
+        @keyframes zonePulse {
+            0% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: 20; }
+        }
+
+        /* Leaflet customization */
+        .leaflet-container {
+            font-family: inherit;
+        }
+        .leaflet-bar {
+            border: none !important;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+        }
+        .leaflet-bar a {
+            background-color: #1e293b !important;
+            color: #f8fafc !important;
+            border-bottom: 1px solid #334155 !important;
+        }
+        .leaflet-bar a:hover {
+            background-color: #334155 !important;
+        }
+
+        /* Bézier Handle styling */
+        .bezier-handle-icon {
+            background-color: #f59e0b;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
+            cursor: grab;
+        }
+        .bezier-handle-icon:active {
+            cursor: grabbing;
+            transform: scale(1.2);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-full flex flex-col overflow-hidden font-sans antialiased select-none">
+
+    <!-- Top Navigation / Control Bar -->
+    <header class="h-14 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between z-20 shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20 text-emerald-400">
+                <i data-lucide="route" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <div class="flex items-center space-x-2">
+                    <h1 class="font-bold text-sm leading-none text-slate-100">Route Map Navigator Pro</h1>
+                    <span id="active-route-badge" class="bg-emerald-500/20 text-emerald-400 text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/30 truncate max-w-[150px]">
+                        Itinéraire 1
+                    </span>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5" id="map-info">Chargement de la carte...</p>
+            </div>
+        </div>
+
+        <!-- Mode Toggle Switch -->
+        <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button id="mode-edit-btn" onclick="setMode('edit')" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 bg-emerald-600 text-white shadow-lg">
+                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                <span>Édition (Tracé & Courbes)</span>
+            </button>
+            <button id="mode-play-btn" onclick="setMode('play')" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 text-slate-400 hover:text-slate-200">
+                <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                <span>Lecture (Pas à pas)</span>
+            </button>
+        </div>
+
+        <!-- Top Right Actions & Settings -->
+        <div class="flex items-center space-x-2">
+            <button onclick="exportJSON()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg font-medium transition border border-slate-700 flex items-center space-x-1" title="Exporter l'itinéraire courant (JSON)">
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">Exporter</span>
+            </button>
+
+            <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg font-medium transition border border-slate-700 flex items-center space-x-1" title="Importer un itinéraire (JSON)">
+                <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">Importer</span>
+                <input type="file" id="json-loader" accept=".json" class="hidden" onchange="importJSON(event)">
+            </label>
+
+            <!-- Gear Settings Button -->
+            <button onclick="openSettingsModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-md flex items-center space-x-1.5" title="Paramètres">
+                <i data-lucide="settings" class="w-4 h-4"></i>
+                <span>Paramètres</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="flex-1 flex relative overflow-hidden">
+
+        <!-- Sidebar / Steps Panel -->
+        <aside id="sidebar" class="w-88 bg-slate-900/95 backdrop-blur border-r border-slate-800 flex flex-col z-10 transition-all duration-300">
+            <!-- Sidebar Header -->
+            <div class="p-3 border-b border-slate-800 flex items-center justify-between">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center space-x-1">
+                    <i data-lucide="list-ordered" class="w-4 h-4 text-emerald-400"></i>
+                    <span>Étapes (<span id="total-steps-count">0</span>)</span>
+                </span>
+                <span id="edit-hint" class="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">Clic carte = ajouter</span>
+            </div>
+
+            <!-- Steps List -->
+            <div id="steps-container" class="flex-1 overflow-y-auto p-2 space-y-2">
+                <!-- Dynamic Content -->
+            </div>
+
+            <!-- Opacity Range Bar Indicator -->
+            <div class="p-3 bg-slate-950/60 border-t border-slate-800 text-xs space-y-2">
+                <div class="flex justify-between items-center text-slate-400 font-medium text-[11px]">
+                    <span>Filtre d'opacité actif</span>
+                    <span id="opacity-info-label" class="text-[10px] text-emerald-400 font-mono">T-3 à T+3</span>
+                </div>
+                <div id="opacity-preview-bar" class="grid grid-cols-7 gap-1 text-center text-[9px] font-mono">
+                    <!-- Dynamic Preview -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- Map Canvas Viewport -->
+        <main class="flex-1 relative bg-slate-950">
+            <div id="map" class="w-full h-full"></div>
+
+            <!-- Floating Navigation Controls at Bottom -->
+            <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-[500] w-full max-w-xl px-4 pointer-events-none">
+                <div class="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl p-3 pointer-events-auto flex flex-col space-y-2">
+                    
+                    <!-- Navigation Step Info -->
+                    <div class="flex items-center justify-between px-1">
+                        <div class="flex items-center space-x-2 overflow-hidden">
+                            <span id="step-badge" class="bg-emerald-500 text-slate-950 font-extrabold text-xs px-2.5 py-1 rounded-md shrink-0">
+                                T - 0
+                            </span>
+                            <div class="truncate">
+                                <h3 id="current-step-title" class="text-sm font-semibold text-slate-100 truncate">Aucune étape</h3>
+                                <p id="current-step-note" class="text-[11px] text-slate-400 truncate">Cliquez sur la carte ou utilisez les paramètres.</p>
+                            </div>
+                        </div>
+
+                        <!-- Auto-center Toggle -->
+                        <button id="autocenter-toggle" onclick="toggleAutoCenter()" class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-1.5 rounded-lg text-xs flex items-center space-x-1 hover:bg-emerald-500/20 transition shrink-0" title="Recentrer automatiquement sur l'étape">
+                            <i data-lucide="crosshair" class="w-4 h-4"></i>
+                            <span class="text-[11px] font-medium hidden sm:inline">Auto-focus</span>
+                        </button>
+                    </div>
+
+                    <!-- Step Navigation Slider -->
+                    <div class="flex items-center space-x-3 pt-1">
+                        <button onclick="prevStep()" class="bg-slate-800 hover:bg-slate-700 text-slate-100 p-2.5 rounded-xl transition active:scale-95 border border-slate-700 shadow shrink-0" title="Étape précédente (Flèche Gauche)">
+                            <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                        </button>
+
+                        <input type="range" id="progress-range" min="0" max="0" value="0" oninput="onSliderChange(this.value)" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+
+                        <button onclick="nextStep()" class="bg-slate-800 hover:bg-slate-700 text-slate-100 p-2.5 rounded-xl transition active:scale-95 border border-slate-700 shadow shrink-0" title="Étape suivante (Flèche Droite)">
+                            <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Shortcuts Overlay -->
+            <div class="absolute top-3 right-3 z-[500] bg-slate-900/80 backdrop-blur px-3 py-1.5 rounded-lg border border-slate-800 text-[11px] text-slate-400 flex items-center space-x-2 pointer-events-none">
+                <i data-lucide="keyboard" class="w-3.5 h-3.5 text-slate-500"></i>
+                <span>Navigation : <kbd class="px-1 py-0.5 bg-slate-800 rounded text-slate-300 font-mono">←</kbd> / <kbd class="px-1 py-0.5 bg-slate-800 rounded text-slate-300 font-mono">→</kbd></span>
+            </div>
+        </main>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[1000] hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-900">
+                <div class="flex items-center space-x-2">
+                    <div class="bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20 text-emerald-400">
+                        <i data-lucide="settings" class="w-5 h-5"></i>
+                    </div>
+                    <h2 class="font-bold text-base text-slate-100">Paramètres de l'application</h2>
+                </div>
+                <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-slate-800">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Modal Content (Scrollable) -->
+            <div class="p-6 space-y-6 overflow-y-auto flex-1">
+
+                <!-- SECTION 1: ITINÉRARAIRES / PARCOURS -->
+                <div class="space-y-3">
+                    <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center space-x-1.5">
+                        <i data-lucide="map" class="w-4 h-4"></i>
+                        <span>Gestion des Itinéraires / Parcours</span>
+                    </h3>
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="text-xs font-medium text-slate-300 shrink-0">Parcours actif :</label>
+                            <select id="route-selector" onchange="switchRoutePreset(this.value)" class="bg-slate-900 text-xs font-semibold text-slate-100 border border-slate-700 rounded-lg p-2 flex-1 focus:outline-none focus:border-emerald-500">
+                                <!-- Options populated dynamically -->
+                            </select>
+                        </div>
+
+                        <div class="flex items-center space-x-2 pt-2 border-t border-slate-800">
+                            <button onclick="createNewRoutePreset()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-1 border border-slate-700">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                                <span>Nouveau parcours</span>
+                            </button>
+                            <button onclick="renameCurrentRoutePreset()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg font-medium transition flex items-center space-x-1 border border-slate-700">
+                                <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                                <span>Renommer</span>
+                            </button>
+                            <button onclick="deleteCurrentRoutePreset()" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs px-3 py-1.5 rounded-lg font-medium transition border border-red-500/30 flex items-center space-x-1">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                <span>Supprimer</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 2: CARTE EN FOND (scan automatique de ./images/maps/) -->
+                <div class="space-y-3">
+                    <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center space-x-1.5">
+                        <i data-lucide="image" class="w-4 h-4"></i>
+                        <span>Emplacement de la carte en fond</span>
+                    </h3>
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                        <label class="text-xs font-medium text-slate-300">Cartes du dossier (<code class="text-emerald-400">./images/maps/</code>) :</label>
+                        <div class="flex space-x-2">
+                            <select id="map-preset-selector" onchange="selectMapFromPreset(this.value)" class="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-mono">
+                                <!-- Rempli automatiquement par le scan du dossier -->
+                            </select>
+                            <button onclick="refreshMapList()" title="Rescanner le dossier" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg transition border border-slate-700 shrink-0">
+                                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                        <p id="map-scan-status" class="text-[10px] text-slate-500"></p>
+                    </div>
+                </div>
+
+                <!-- SECTION 3: REGLAGES D'OPACITE PAS A PAS -->
+                <div class="space-y-3">
+                    <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center space-x-1.5">
+                        <i data-lucide="eye" class="w-4 h-4"></i>
+                        <span>Affichage dynamique des étapes (Pas à pas)</span>
+                    </h3>
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-4">
+                        
+                        <!-- Slider T-x Past -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-xs">
+                                <label class="text-slate-300 font-medium">Étapes passées affichées (T - x) :</label>
+                                <span id="setting-tx-val" class="text-emerald-400 font-mono font-bold">3 étapes</span>
+                            </div>
+                            <input type="range" id="setting-tx-range" min="0" max="10" value="3" oninput="updateOpacitySettings()" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                        </div>
+
+                        <!-- Slider T+x Future -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-xs">
+                                <label class="text-slate-300 font-medium">Étapes futures anticipées (T + x) :</label>
+                                <span id="setting-tplus-val" class="text-emerald-400 font-mono font-bold">3 étapes</span>
+                            </div>
+                            <input type="range" id="setting-tplus-range" min="0" max="10" value="3" oninput="updateOpacitySettings()" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+                        </div>
+
+                        <!-- Checkbox Hide Out of Scope -->
+                        <div class="flex items-center space-x-2 pt-2 border-t border-slate-800">
+                            <input type="checkbox" id="setting-hide-out-of-scope" onchange="updateOpacitySettings()" class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-emerald-500 focus:ring-emerald-500">
+                            <label for="setting-hide-out-of-scope" class="text-xs text-slate-300 cursor-pointer">
+                                Masquer complètement les étapes en dehors de la plage (0 % d'opacité)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-3 bg-slate-950 border-t border-slate-800 flex justify-between items-center text-xs text-slate-400">
+                <span>Changements sauvegardés automatiquement.</span>
+                <button onclick="closeSettingsModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-1.5 rounded-lg transition">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Application Global State
+        let currentMode = 'edit'; // 'edit' or 'play'
+        let autoCenter = true;
+        let isMapReady = false; // Guard preventing state overwrite before image load
+
+        // Settings State
+        let settings = {
+            mapImagePath: '',    // ex: 'images/maps/ma_carte.png' (chemin relatif)
+            maxPastSteps: 3,     // T-x
+            maxFutureSteps: 3,   // T+x
+            hideOutOfScope: false
+        };
+
+        // Dossier des cartes (chemin relatif : le projet peut être déplacé n'importe où)
+        const MAPS_DIR = 'images/maps/';
+        const MAP_EXT = /\.(png|jpe?g|webp|gif|avif|bmp|svg)$/i;
+        let availableMaps = [];   // noms de fichiers trouvés dans MAPS_DIR
+        let scanMethod = '';
+
+        // Encode chaque segment du chemin (espaces, accents, #, ? ...) en gardant les "/"
+        function toUrl(path) {
+            return path.split('/').map(encodeURIComponent).join('/');
+        }
+
+        // Méthode 1 : page d'index du dossier (serveur local : python -m http.server, Live Server...)
+        async function listFromDirectoryIndex() {
+            try {
+                const res = await fetch(MAPS_DIR, { cache: 'no-store' });
+                if (!res.ok) return [];
+                if (!(res.headers.get('content-type') || '').includes('text/html')) return [];
+                const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+                return [...doc.querySelectorAll('a[href]')].map(a => {
+                    const href = a.getAttribute('href').split('?')[0].split('#')[0];
+                    try { return decodeURIComponent(href.split('/').filter(Boolean).pop() || ''); }
+                    catch (e) { return ''; }
+                }).filter(n => MAP_EXT.test(n));
+            } catch (e) { return []; }
+        }
+
+        // Méthode 2 : API GitHub (quand le site est hébergé sur GitHub Pages : user.github.io/repo/)
+        async function listFromGitHubApi() {
+            if (!location.hostname.endsWith('.github.io')) return [];
+            const owner = location.hostname.split('.')[0];
+            const segs = location.pathname.split('/').filter(Boolean);
+            if (segs.length && segs[segs.length - 1].includes('.')) segs.pop(); // retire index.html
+            const candidates = [];
+            if (segs.length) candidates.push({ repo: segs[0], sub: segs.slice(1) });
+            candidates.push({ repo: `${owner}.github.io`, sub: segs });
+            for (const c of candidates) {
+                const path = [...c.sub, MAPS_DIR.replace(/\/$/, '')].join('/');
+                try {
+                    const res = await fetch(`https://api.github.com/repos/${owner}/${c.repo}/contents/${path}`,
+                        { headers: { Accept: 'application/vnd.github+json' } });
+                    if (!res.ok) continue;
+                    const data = await res.json();
+                    if (Array.isArray(data)) {
+                        return data.filter(f => f.type === 'file' && MAP_EXT.test(f.name)).map(f => f.name);
+                    }
+                } catch (e) { /* on essaie le candidat suivant */ }
+            }
+            return [];
+        }
+
+        // Méthode 3 (secours, marche partout même en file://) : fichier images/maps/maps.js
+        // contenant :  window.MAPS_MANIFEST = ["carte1.png", "carte2.png"];
+        function listFromManifest() {
+            return new Promise(resolve => {
+                delete window.MAPS_MANIFEST;
+                const sc = document.createElement('script');
+                sc.src = MAPS_DIR + 'maps.js?t=' + Date.now();
+                sc.onload = () => {
+                    const list = window.MAPS_MANIFEST;
+                    sc.remove();
+                    resolve(Array.isArray(list) ? list.filter(n => typeof n === 'string' && MAP_EXT.test(n)) : []);
+                };
+                sc.onerror = () => { sc.remove(); resolve([]); };
+                document.head.appendChild(sc);
+            });
+        }
+
+        async function scanMapsFolder() {
+            let names = [];
+            scanMethod = '';
+            if (location.protocol !== 'file:') {
+                names = await listFromDirectoryIndex();
+                if (names.length) scanMethod = 'dossier';
+                if (!names.length) {
+                    names = await listFromGitHubApi();
+                    if (names.length) scanMethod = 'GitHub';
+                }
+            }
+            if (!names.length) {
+                names = await listFromManifest();
+                if (names.length) scanMethod = 'maps.js';
+            }
+            availableMaps = [...new Set(names)].sort((a, b) =>
+                a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+        }
+
+        // Choisit la carte à afficher : celle sauvegardée si elle existe, sinon la première du dossier
+        function resolveCurrentMap() {
+            const paths = availableMaps.map(n => MAPS_DIR + n);
+            if (paths.length && !paths.includes(settings.mapImagePath)) {
+                settings.mapImagePath = paths[0];
+                localStorage.removeItem('route_planner_map_center');
+                localStorage.removeItem('route_planner_map_zoom');
+            }
+            currentImageUrl = settings.mapImagePath ? toUrl(settings.mapImagePath) : '';
+        }
+
+        // Saved Routes Library
+        let routePresets = {
+            "Itinéraire Principal": []
+        };
+        let currentRouteName = "Itinéraire Principal";
+        let steps = [];
+        let currentStepIndex = -1;
+
+        // Leaflet Map & Layer References
+        let map = null;
+        let stepMarkers = [];
+        let lineSubSegments = [];
+        let bezierHandles = [];
+        let handleGuides = [];
+        let searchZoneLayers = [];
+        let mapImageBounds = [[0, 0], [4000, 4000]];
+        let currentImageUrl = '';
+
+        window.onload = async function() {
+            lucide.createIcons();
+            loadStateFromLocalStorage();
+            await scanMapsFolder();
+            resolveCurrentMap();
+            initLeafletMap();
+            setupKeyboardShortcuts();
+
+            window.addEventListener('resize', function() {
+                if (map) map.invalidateSize();
+            });
+        };
+
+        function loadStateFromLocalStorage() {
+            try {
+                // Load Settings
+                const savedSettings = localStorage.getItem('route_planner_settings');
+                if (savedSettings) {
+                    settings = { ...settings, ...JSON.parse(savedSettings) };
+                }
+                // Nettoyage des anciennes versions (liste de cartes figée, "Image locale: ...")
+                delete settings.mapPresets;
+                if (typeof settings.mapImagePath !== 'string' || !settings.mapImagePath.startsWith(MAPS_DIR)) {
+                    settings.mapImagePath = '';
+                }
+                localStorage.removeItem('route_planner_custom_image');
+
+                // Load Presets
+                const savedPresets = localStorage.getItem('route_planner_presets');
+                if (savedPresets) {
+                    routePresets = JSON.parse(savedPresets);
+                }
+
+                // Load Active Route Name
+                const savedActiveRoute = localStorage.getItem('route_planner_active_route');
+                if (savedActiveRoute && routePresets[savedActiveRoute]) {
+                    currentRouteName = savedActiveRoute;
+                } else {
+                    currentRouteName = Object.keys(routePresets)[0] || "Itinéraire Principal";
+                }
+
+                steps = routePresets[currentRouteName] || [];
+
+                // Load Active Step Index
+                const savedIndex = localStorage.getItem('route_planner_step_index');
+                if (savedIndex !== null) {
+                    currentStepIndex = parseInt(savedIndex, 10);
+                } else {
+                    currentStepIndex = steps.length > 0 ? 0 : -1;
+                }
+
+            } catch (e) {
+                console.warn("Impossible de charger l'état local", e);
+            }
+        }
+
+        function saveStateToLocalStorage() {
+            try {
+                // Sync current active steps to active route preset
+                routePresets[currentRouteName] = steps;
+
+                localStorage.setItem('route_planner_settings', JSON.stringify(settings));
+                localStorage.setItem('route_planner_presets', JSON.stringify(routePresets));
+                localStorage.setItem('route_planner_active_route', currentRouteName);
+                localStorage.setItem('route_planner_step_index', currentStepIndex.toString());
+
+                if (isMapReady && map) {
+                    const center = map.getCenter();
+                    const zoom = map.getZoom();
+                    if (center && !isNaN(center.lat) && !isNaN(center.lng) && !isNaN(zoom)) {
+                        localStorage.setItem('route_planner_map_center', JSON.stringify([center.lat, center.lng]));
+                        localStorage.setItem('route_planner_map_zoom', zoom.toString());
+                    }
+                }
+            } catch (e) {
+                console.warn("Erreur lors de la sauvegarde dans localStorage", e);
+            }
+        }
+
+        function generateProceduralDemoMap() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 4000;
+            canvas.height = 4000;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, 4000, 4000);
+
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 4;
+            for (let x = 0; x <= 4000; x += 200) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, 4000);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= 4000; y += 200) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(4000, y);
+                ctx.stroke();
+            }
+
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath();
+            ctx.arc(1000, 1000, 600, 0, Math.PI * 2);
+            ctx.arc(3000, 2500, 800, 0, Math.PI * 2);
+            ctx.arc(2000, 3200, 500, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#334155';
+            ctx.font = '900 120px sans-serif';
+            ctx.fillText('ZONE DEMO ALPHA', 700, 1000);
+            ctx.fillText('ZONE DEMO BETA', 2600, 2500);
+
+            return canvas.toDataURL();
+        }
+
+        function initLeafletMap() {
+            isMapReady = false;
+
+            if (map) {
+                map.remove();
+            }
+
+            map = L.map('map', {
+                crs: L.CRS.Simple,
+                minZoom: -6,
+                maxZoom: 5,
+                zoomSnap: 0.1,
+                wheelPxPerZoomLevel: 120,
+                scrollWheelZoom: true,
+                doubleClickZoom: true,
+                touchZoom: true,
+                dragging: true,
+                attributionControl: false
+            });
+
+            const img = new Image();
+            img.onload = function() {
+                const w = this.naturalWidth || 4000;
+                const h = this.naturalHeight || 4000;
+                mapImageBounds = [[0, 0], [h, w]];
+
+                L.imageOverlay(currentImageUrl, mapImageBounds).addTo(map);
+
+                // Dynamically calculate zoom bounds to allow proper zoom in/out
+                const fitZoom = map.getBoundsZoom(mapImageBounds, true);
+                const minZoom = Math.floor(fitZoom) - 2;
+                const maxZoom = minZoom + 8;
+                map.setMinZoom(minZoom);
+                map.setMaxZoom(maxZoom);
+
+                // Restore saved camera position if available
+                const savedCenter = localStorage.getItem('route_planner_map_center');
+                const savedZoom = localStorage.getItem('route_planner_map_zoom');
+
+                if (savedCenter && savedZoom) {
+                    try {
+                        const center = JSON.parse(savedCenter);
+                        const zoom = parseFloat(savedZoom);
+                        if (Array.isArray(center) && center.length === 2 && !isNaN(center[0]) && !isNaN(center[1]) && !isNaN(zoom)) {
+                            map.setView(center, Math.max(minZoom, Math.min(maxZoom, zoom)));
+                        } else {
+                            map.fitBounds(mapImageBounds);
+                        }
+                    } catch(e) {
+                        map.fitBounds(mapImageBounds);
+                    }
+                } else {
+                    map.fitBounds(mapImageBounds);
+                }
+
+                document.getElementById('map-info').innerText = `Carte : ${w} x ${h} px`;
+                isMapReady = true;
+                
+                setTimeout(() => {
+                    map.invalidateSize();
+                    renderAll();
+                }, 50);
+            };
+
+            const failedPath = currentImageUrl;
+            img.onerror = function() {
+                console.warn("Image introuvable :", failedPath);
+                currentImageUrl = generateProceduralDemoMap();
+                mapImageBounds = [[0, 0], [4000, 4000]];
+                L.imageOverlay(currentImageUrl, mapImageBounds).addTo(map);
+
+                const fitZoom = map.getBoundsZoom(mapImageBounds, true);
+                const minZoom = Math.floor(fitZoom) - 2;
+                const maxZoom = minZoom + 8;
+                map.setMinZoom(minZoom);
+                map.setMaxZoom(maxZoom);
+
+                map.fitBounds(mapImageBounds);
+                document.getElementById('map-info').innerText = failedPath
+                    ? `Carte introuvable : ${failedPath} (carte de démonstration affichée)`
+                    : `Aucune carte trouvée dans ${MAPS_DIR} (carte de démonstration affichée)`;
+                isMapReady = true;
+
+                setTimeout(() => {
+                    map.invalidateSize();
+                    renderAll();
+                }, 50);
+            };
+
+            if (currentImageUrl) {
+                img.src = currentImageUrl;
+            } else {
+                img.onerror();
+            }
+
+            // Map Click -> Add Step
+            map.on('click', function(e) {
+                if (currentMode === 'edit') {
+                    addStep(e.latlng.lat, e.latlng.lng);
+                }
+            });
+
+            // Save map position on move/zoom
+            map.on('moveend', saveStateToLocalStorage);
+            map.on('zoomend', saveStateToLocalStorage);
+        }
+
+        function addStep(lat, lng, title = '', note = '') {
+            const stepNumber = steps.length + 1;
+            const newStep = {
+                id: Date.now() + Math.random(),
+                lat: lat,
+                lng: lng,
+                title: title || `Étape ${stepNumber}`,
+                note: note || '',
+                // Bézier control point to curve segment towards next step
+                controlLat: null,
+                controlLng: null,
+                // Linked Search Zone settings
+                hasZone: false,
+                zoneRadius: 250
+            };
+
+            steps.push(newStep);
+
+            if (steps.length === 1) {
+                currentStepIndex = 0;
+            } else if (currentMode === 'edit') {
+                currentStepIndex = steps.length - 1;
+            }
+
+            saveStateToLocalStorage();
+            renderAll();
+        }
+
+        function removeStep(index, event) {
+            if (event) event.stopPropagation();
+            steps.splice(index, 1);
+            if (currentStepIndex >= steps.length) {
+                currentStepIndex = steps.length - 1;
+            }
+            saveStateToLocalStorage();
+            renderAll();
+        }
+
+        function updateStepDetails(index, field, value) {
+            if (steps[index]) {
+                steps[index][field] = value;
+                saveStateToLocalStorage();
+                renderAll();
+            }
+        }
+
+        function toggleStepSearchZone(index, event) {
+            if (event) event.stopPropagation();
+            if (steps[index]) {
+                steps[index].hasZone = !steps[index].hasZone;
+                saveStateToLocalStorage();
+                renderAll();
+            }
+        }
+
+        function updateStepZoneRadius(index, radiusVal) {
+            if (steps[index]) {
+                steps[index].zoneRadius = parseInt(radiusVal, 10);
+                saveStateToLocalStorage();
+                renderAll();
+            }
+        }
+
+        function resetBezierCurve(index, event) {
+            if (event) event.stopPropagation();
+            if (steps[index]) {
+                steps[index].controlLat = null;
+                steps[index].controlLng = null;
+                saveStateToLocalStorage();
+                renderAll();
+            }
+        }
+
+        function calculateStepOpacity(index) {
+            if (currentStepIndex === -1) return 1.0;
+
+            const delta = index - currentStepIndex;
+
+            if (delta === 0) return 1.0; // Current step T0
+
+            if (delta < 0) { // Past steps T - x
+                const pastDist = Math.abs(delta);
+                if (pastDist <= settings.maxPastSteps) {
+                    return Math.max(0.15, 1.0 - (pastDist * (0.75 / (settings.maxPastSteps || 1))));
+                } else {
+                    return settings.hideOutOfScope ? 0.0 : 0.05;
+                }
+            } else { // Future steps T + x
+                const futureDist = delta;
+                if (futureDist <= settings.maxFutureSteps) {
+                    return Math.max(0.15, 1.0 - (futureDist * (0.75 / (settings.maxFutureSteps || 1))));
+                } else {
+                    return settings.hideOutOfScope ? 0.0 : 0.05;
+                }
+            }
+        }
+
+        function sampleQuadraticBezierSegments(p0, p1, p2, opStart, opEnd, samplesCount = 20) {
+            const segments = [];
+            let prevPt = p0;
+            let prevOp = opStart;
+
+            for (let i = 1; i <= samplesCount; i++) {
+                const t = i / samplesCount;
+                const invT = 1 - t;
+
+                // Quadratic Bézier curve formula: B(t) = (1-t)^2 * P0 + 2(1-t)t * P1 + t^2 * P2
+                const lat = invT * invT * p0[0] + 2 * invT * t * p1[0] + t * t * p2[0];
+                const lng = invT * invT * p0[1] + 2 * invT * t * p1[1] + t * t * p2[1];
+                const currentPt = [lat, lng];
+
+                // Linear interpolation of opacity from start step to end step
+                const currentOp = opStart + t * (opEnd - opStart);
+
+                segments.push({
+                    p1: prevPt,
+                    p2: currentPt,
+                    opacity: (prevOp + currentOp) / 2
+                });
+
+                prevPt = currentPt;
+                prevOp = currentOp;
+            }
+
+            return segments;
+        }
+
+        function renderAll() {
+            // Update Active Route Badge
+            document.getElementById('active-route-badge').innerText = currentRouteName;
+
+            // Render Sidebar List
+            renderSidebarList();
+
+            // Update Opacity Preview Bar
+            renderOpacityPreviewBar();
+
+            // Update Progress Slider
+            const range = document.getElementById('progress-range');
+            range.max = Math.max(0, steps.length - 1);
+            range.value = currentStepIndex >= 0 ? currentStepIndex : 0;
+
+            // Clear existing map layers
+            stepMarkers.forEach(m => map.removeLayer(m));
+            lineSubSegments.forEach(s => map.removeLayer(s));
+            bezierHandles.forEach(h => map.removeLayer(h));
+            handleGuides.forEach(g => map.removeLayer(g));
+            searchZoneLayers.forEach(z => map.removeLayer(z));
+
+            stepMarkers = [];
+            lineSubSegments = [];
+            bezierHandles = [];
+            handleGuides = [];
+            searchZoneLayers = [];
+
+            if (steps.length === 0) {
+                renderStepBanner();
+                return;
+            }
+
+            // 1. Render Bézier Curved Lines with Smooth Opacity Gradient Interpolation
+            for (let i = 0; i < steps.length - 1; i++) {
+                const startStep = steps[i];
+                const endStep = steps[i + 1];
+
+                const p0 = [startStep.lat, startStep.lng];
+                const p2 = [endStep.lat, endStep.lng];
+
+                // Determine Quadratic Control Point (Default: midpoint)
+                let p1 = [ (p0[0] + p2[0]) / 2, (p0[1] + p2[1]) / 2 ];
+                if (startStep.controlLat !== null && startStep.controlLng !== null) {
+                    p1 = [startStep.controlLat, startStep.controlLng];
+                } else {
+                    // Store initial midpoint reference
+                    startStep.controlLat = p1[0];
+                    startStep.controlLng = p1[1];
+                }
+
+                const opStart = calculateStepOpacity(i);
+                const opEnd = calculateStepOpacity(i + 1);
+
+                // Sample curve into subsegments each with its interpolated opacity (0% -> 100%)
+                const subSegments = sampleQuadraticBezierSegments(p0, p1, p2, opStart, opEnd, 24);
+
+                const isCurrentSegment = (i === currentStepIndex || i === currentStepIndex - 1);
+
+                subSegments.forEach(seg => {
+                    if (seg.opacity > 0) {
+                        const line = L.polyline([seg.p1, seg.p2], {
+                            color: isCurrentSegment ? '#22c55e' : '#38bdf8',
+                            weight: isCurrentSegment ? 5 : 3.5,
+                            opacity: seg.opacity,
+                            lineCap: 'round'
+                        }).addTo(map);
+
+                        lineSubSegments.push(line);
+                    }
+                });
+
+                // Edit Mode: Render Bézier Handle Control Point and Guide Lines
+                if (currentMode === 'edit') {
+                    // Guide lines from start to control and control to end
+                    const guideLine = L.polyline([p0, p1, p2], {
+                        color: '#f59e0b',
+                        weight: 1.5,
+                        dashArray: '4, 4',
+                        opacity: 0.6
+                    }).addTo(map);
+                    handleGuides.push(guideLine);
+
+                    // Draggable Handle Icon
+                    const handleIcon = L.divIcon({
+                        className: 'bezier-handle-icon',
+                        iconSize: [14, 14],
+                        iconAnchor: [7, 7]
+                    });
+
+                    const handleMarker = L.marker([p1[0], p1[1]], {
+                        icon: handleIcon,
+                        draggable: true,
+                        title: `Poignée de courbe (Étape ${i + 1} → ${i + 2})`
+                    }).addTo(map);
+
+                    handleMarker.on('drag', function(e) {
+                        const newPos = e.target.getLatLng();
+                        startStep.controlLat = newPos.lat;
+                        startStep.controlLng = newPos.lng;
+                        
+                        // Live redraw guide lines
+                        guideLine.setLatLngs([p0, [newPos.lat, newPos.lng], p2]);
+                    });
+
+                    handleMarker.on('dragend', function() {
+                        saveStateToLocalStorage();
+                        renderAll();
+                    });
+
+                    bezierHandles.push(handleMarker);
+                }
+            }
+
+            // 2. Render Search Zones Linked to Steps (Zones de Fouille)
+            steps.forEach((step, index) => {
+                const stepOpacity = calculateStepOpacity(index);
+
+                if (step.hasZone && stepOpacity > 0) {
+                    const isCurrent = (index === currentStepIndex);
+
+                    const circleZone = L.circle([step.lat, step.lng], {
+                        radius: step.zoneRadius || 250,
+                        color: isCurrent ? '#22c55e' : '#f59e0b',
+                        weight: isCurrent ? 2.5 : 1.5,
+                        dashArray: isCurrent ? '8, 6' : '4, 4',
+                        fillColor: isCurrent ? '#22c55e' : '#f59e0b',
+                        fillOpacity: stepOpacity * 0.2,
+                        opacity: stepOpacity * 0.8,
+                        className: isCurrent ? 'search-zone-pulse' : ''
+                    }).addTo(map);
+
+                    // Click zone to select step
+                    circleZone.on('click', () => {
+                        currentStepIndex = index;
+                        saveStateToLocalStorage();
+                        renderAll();
+                    });
+
+                    searchZoneLayers.push(circleZone);
+                }
+            });
+
+            // 3. Render Step Point Markers
+            steps.forEach((step, index) => {
+                const opacity = calculateStepOpacity(index);
+                if (opacity <= 0) return; // Hidden completely if hideOutOfScope
+
+                const isCurrent = (index === currentStepIndex);
+
+                const markerHtml = `
+                    <div style="opacity: ${opacity}; transition: opacity 0.3s ease;" class="relative group flex items-center justify-center">
+                        ${isCurrent ? '<div class="absolute w-10 h-10 rounded-full bg-emerald-500/40 active-step-ping"></div>' : ''}
+                        <div class="w-8 h-8 rounded-full ${isCurrent ? 'bg-emerald-500 text-slate-950 font-black shadow-lg shadow-emerald-500/50 scale-110' : 'bg-slate-900 border-2 border-emerald-400 text-emerald-400 font-bold'} flex items-center justify-center text-xs shadow-md transition-all">
+                            ${index + 1}
+                        </div>
+                        ${step.title ? `
+                            <div class="absolute left-10 whitespace-nowrap bg-slate-900/90 text-slate-100 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-700 shadow-xl pointer-events-none">
+                                ${step.title} ${step.hasZone ? '<span class="text-amber-400 ml-1">🔍 Zone</span>' : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+
+                const customIcon = L.divIcon({
+                    html: markerHtml,
+                    className: 'custom-map-marker',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                });
+
+                const marker = L.marker([step.lat, step.lng], { icon: customIcon }).addTo(map);
+
+                marker.on('click', () => {
+                    currentStepIndex = index;
+                    saveStateToLocalStorage();
+                    renderAll();
+                    if (autoCenter) centerMapOnStep(index);
+                });
+
+                stepMarkers.push(marker);
+            });
+
+            if (autoCenter && currentStepIndex >= 0 && currentStepIndex < steps.length) {
+                centerMapOnStep(currentStepIndex);
+            }
+
+            renderStepBanner();
+        }
+
+        function centerMapOnStep(index) {
+            if (steps[index]) {
+                map.panTo([steps[index].lat, steps[index].lng], { animate: true, duration: 0.4 });
+            }
+        }
+
+        function renderSidebarList() {
+            const container = document.getElementById('steps-container');
+            document.getElementById('total-steps-count').innerText = steps.length;
+
+            if (steps.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 px-4">
+                        <div class="w-12 h-12 rounded-full bg-slate-800 text-slate-500 flex items-center justify-center mx-auto mb-3">
+                            <i data-lucide="map-pin-off" class="w-6 h-6"></i>
+                        </div>
+                        <p class="text-xs text-slate-400 font-medium">Aucun point d'étape</p>
+                        <p class="text-[11px] text-slate-500 mt-1">Cliquez sur la carte pour commencer votre itinéraire.</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            container.innerHTML = '';
+
+            steps.forEach((step, index) => {
+                const isSelected = (index === currentStepIndex);
+
+                const item = document.createElement('div');
+                item.className = `p-2.5 rounded-xl border transition-all duration-150 cursor-pointer flex flex-col space-y-2 ${
+                    isSelected 
+                    ? 'bg-emerald-500/10 border-emerald-500/40 text-slate-100 shadow-md' 
+                    : 'bg-slate-800/50 hover:bg-slate-800 border-slate-800 text-slate-300'
+                }`;
+
+                item.onclick = () => {
+                    currentStepIndex = index;
+                    saveStateToLocalStorage();
+                    renderAll();
+                };
+
+                const delta = index - currentStepIndex;
+                const tagLabel = delta === 0 ? 'T0 (100%)' : `T${delta > 0 ? '+' : ''}${delta}`;
+
+                const hasNextSegment = index < steps.length - 1;
+
+                item.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-5 h-5 rounded-md ${isSelected ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-slate-700 text-slate-300'} flex items-center justify-center text-[10px] font-mono shrink-0">
+                                ${index + 1}
+                            </span>
+                            <input type="text" value="${step.title}" 
+                                onclick="event.stopPropagation()"
+                                onchange="updateStepDetails(${index}, 'title', this.value)"
+                                class="bg-transparent border-b border-transparent hover:border-slate-700 focus:border-emerald-500 focus:bg-slate-950/50 text-xs font-medium focus:outline-none px-1 rounded text-slate-100 w-36 truncate">
+                        </div>
+                        <div class="flex items-center space-x-1 shrink-0">
+                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded ${isSelected ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-950 text-slate-500'}">
+                                ${tagLabel}
+                            </span>
+                            <button onclick="removeStep(${index}, event)" class="text-slate-500 hover:text-red-400 p-1 rounded hover:bg-red-500/10" title="Supprimer l'étape">
+                                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <input type="text" placeholder="+ Note / Action (ex: Prendre TP, Parchm...)" value="${step.note}" 
+                        onclick="event.stopPropagation()"
+                        onchange="updateStepDetails(${index}, 'note', this.value)"
+                        class="bg-slate-950/40 text-[11px] text-slate-400 border border-slate-800/80 rounded px-2 py-1 focus:outline-none focus:border-slate-700">
+
+                    <!-- Actions Bar for Search Zone & Curve control -->
+                    <div class="pt-1 flex items-center justify-between border-t border-slate-800/60 text-[10px]">
+                        
+                        <!-- Zone de fouille Toggle -->
+                        <button onclick="toggleStepSearchZone(${index}, event)" class="flex items-center space-x-1 px-2 py-0.5 rounded border ${step.hasZone ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'}" title="Associer une zone de fouille à cette étape">
+                            <i data-lucide="scan" class="w-3 h-3"></i>
+                            <span>${step.hasZone ? 'Zone Active' : '+ Zone Fouille'}</span>
+                        </button>
+
+                        ${hasNextSegment ? `
+                            <button onclick="resetBezierCurve(${index}, event)" class="text-slate-500 hover:text-amber-400 flex items-center space-x-0.5 px-1.5 py-0.5 rounded hover:bg-amber-500/10" title="Réinitialiser la courbe vers l'étape suivante">
+                                <i data-lucide="spline" class="w-3 h-3"></i>
+                                <span>Reset courbe</span>
+                            </button>
+                        ` : ''}
+                    </div>
+
+                    ${step.hasZone ? `
+                        <div class="bg-slate-950/80 p-2 rounded-lg border border-amber-500/30 flex items-center justify-between space-x-2 text-[10px]" onclick="event.stopPropagation()">
+                            <span class="text-amber-400 font-medium shrink-0">Rayon zone :</span>
+                            <input type="range" min="50" max="1000" step="25" value="${step.zoneRadius || 250}" oninput="updateStepZoneRadius(${index}, this.value)" class="w-full h-1.5 bg-slate-800 rounded appearance-none cursor-pointer accent-amber-500">
+                            <span class="text-slate-300 font-mono shrink-0">${step.zoneRadius || 250} px</span>
+                        </div>
+                    ` : ''}
+                `;
+
+                container.appendChild(item);
+            });
+
+            lucide.createIcons();
+        }
+
+        function renderOpacityPreviewBar() {
+            const bar = document.getElementById('opacity-preview-bar');
+            document.getElementById('opacity-info-label').innerText = `T-${settings.maxPastSteps} à T+${settings.maxFutureSteps}`;
+
+            bar.innerHTML = `
+                <div class="bg-slate-800 p-1 rounded text-slate-400">T-${settings.maxPastSteps}</div>
+                <div class="bg-slate-800 p-1 rounded text-slate-300">T-1</div>
+                <div class="bg-emerald-500/20 border border-emerald-500/50 p-1 rounded text-emerald-400 font-bold">T0</div>
+                <div class="bg-slate-800 p-1 rounded text-slate-300">T+1</div>
+                <div class="bg-slate-800 p-1 rounded text-slate-400">T+${settings.maxFutureSteps}</div>
+            `;
+        }
+
+        function renderStepBanner() {
+            const badge = document.getElementById('step-badge');
+            const titleEl = document.getElementById('current-step-title');
+            const noteEl = document.getElementById('current-step-note');
+
+            if (steps.length === 0 || currentStepIndex === -1) {
+                badge.innerText = 'T - 0';
+                titleEl.innerText = 'Aucune étape créée';
+                noteEl.innerText = 'Cliquez sur la carte ou ouvrez les paramètres.';
+                return;
+            }
+
+            const current = steps[currentStepIndex];
+            badge.innerText = `T - ${currentStepIndex + 1}`;
+            titleEl.innerText = current.title + (current.hasZone ? ' (Zone de fouille active)' : '');
+            noteEl.innerText = current.note ? `Note : ${current.note}` : 'Aucune note particulière';
+        }
+
+        function prevStep() {
+            if (steps.length === 0) return;
+            if (currentStepIndex > 0) {
+                currentStepIndex--;
+                saveStateToLocalStorage();
+                renderAll();
+            }
+        }
+
+        function nextStep() {
+            if (steps.length === 0) return;
+            if (currentStepIndex < steps.length - 1) {
+                currentStepIndex++;
+                saveStateToLocalStorage();
+                renderAll();
+            }
+        }
+
+        function onSliderChange(val) {
+            currentStepIndex = parseInt(val, 10);
+            saveStateToLocalStorage();
+            renderAll();
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            const editBtn = document.getElementById('mode-edit-btn');
+            const playBtn = document.getElementById('mode-play-btn');
+            const hint = document.getElementById('edit-hint');
+
+            if (mode === 'edit') {
+                editBtn.className = "flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 bg-emerald-600 text-white shadow-lg";
+                playBtn.className = "flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 text-slate-400 hover:text-slate-200";
+                hint.classList.remove('hidden');
+            } else {
+                playBtn.className = "flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 bg-emerald-600 text-white shadow-lg";
+                editBtn.className = "flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 text-slate-400 hover:text-slate-200";
+                hint.classList.add('hidden');
+            }
+
+            renderAll();
+        }
+
+        function toggleAutoCenter() {
+            autoCenter = !autoCenter;
+            const btn = document.getElementById('autocenter-toggle');
+            if (autoCenter) {
+                btn.className = "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-1.5 rounded-lg text-xs flex items-center space-x-1 hover:bg-emerald-500/20 transition shrink-0";
+                if (currentStepIndex >= 0) centerMapOnStep(currentStepIndex);
+            } else {
+                btn.className = "bg-slate-800 border border-slate-700 text-slate-400 p-1.5 rounded-lg text-xs flex items-center space-x-1 hover:bg-slate-700 transition shrink-0";
+            }
+        }
+
+        function openSettingsModal() {
+            document.getElementById('setting-tx-range').value = settings.maxPastSteps;
+            document.getElementById('setting-tx-val').innerText = `${settings.maxPastSteps} étapes`;
+            document.getElementById('setting-tplus-range').value = settings.maxFutureSteps;
+            document.getElementById('setting-tplus-val').innerText = `${settings.maxFutureSteps} étapes`;
+            document.getElementById('setting-hide-out-of-scope').checked = settings.hideOutOfScope;
+
+            populateRouteSelector();
+            populateMapPresets();
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+
+        function populateMapPresets() {
+            const selector = document.getElementById('map-preset-selector');
+            const status = document.getElementById('map-scan-status');
+            if (!selector) return;
+            selector.innerHTML = '';
+
+            if (!availableMaps.length) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.innerText = 'Aucune carte détectée';
+                selector.appendChild(option);
+                selector.disabled = true;
+                status.innerText = location.protocol === 'file:'
+                    ? "Page ouverte en direct (file://) : le navigateur ne peut pas lister un dossier. Utilise un serveur local ou un fichier images/maps/maps.js."
+                    : "Aucune image trouvée dans images/maps/.";
+                return;
+            }
+
+            selector.disabled = false;
+            availableMaps.forEach(name => {
+                const option = document.createElement('option');
+                option.value = MAPS_DIR + name;
+                option.innerText = name;
+                if (option.value === settings.mapImagePath) option.selected = true;
+                selector.appendChild(option);
+            });
+            status.innerText = `${availableMaps.length} carte(s) détectée(s) (${scanMethod})`;
+        }
+
+        async function refreshMapList() {
+            document.getElementById('map-scan-status').innerText = 'Analyse du dossier...';
+            await scanMapsFolder();
+            populateMapPresets();
+        }
+
+        function selectMapFromPreset(path) {
+            if (!path || path === settings.mapImagePath) return;
+            settings.mapImagePath = path;
+            currentImageUrl = toUrl(path);
+            saveStateToLocalStorage();
+            // Nouvelle carte = nouvelle vue (on oublie la position de la précédente)
+            localStorage.removeItem('route_planner_map_center');
+            localStorage.removeItem('route_planner_map_zoom');
+            initLeafletMap();
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+
+        function populateRouteSelector() {
+            const selector = document.getElementById('route-selector');
+            selector.innerHTML = '';
+            Object.keys(routePresets).forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.innerText = `${name} (${routePresets[name].length} étapes)`;
+                if (name === currentRouteName) option.selected = true;
+                selector.appendChild(option);
+            });
+        }
+
+        function switchRoutePreset(name) {
+            if (routePresets[name]) {
+                routePresets[currentRouteName] = steps;
+                currentRouteName = name;
+                steps = routePresets[name] || [];
+                currentStepIndex = steps.length > 0 ? 0 : -1;
+                saveStateToLocalStorage();
+                renderAll();
+                populateRouteSelector();
+            }
+        }
+
+        function createNewRoutePreset() {
+            const name = prompt("Nom du nouvel itinéraire :", `Itinéraire ${Object.keys(routePresets).length + 1}`);
+            if (name && name.trim()) {
+                const trimmed = name.trim();
+                routePresets[trimmed] = [];
+                switchRoutePreset(trimmed);
+            }
+        }
+
+        function renameCurrentRoutePreset() {
+            const newName = prompt("Nouveau nom pour cet itinéraire :", currentRouteName);
+            if (newName && newName.trim() && newName.trim() !== currentRouteName) {
+                const trimmed = newName.trim();
+                routePresets[trimmed] = steps;
+                delete routePresets[currentRouteName];
+                currentRouteName = trimmed;
+                saveStateToLocalStorage();
+                populateRouteSelector();
+                renderAll();
+            }
+        }
+
+        function deleteCurrentRoutePreset() {
+            const keys = Object.keys(routePresets);
+            if (keys.length <= 1) {
+                alert("Vous devez conserver au moins un itinéraire.");
+                return;
+            }
+
+            if (confirm(`Voulez-vous vraiment supprimer l'itinéraire "${currentRouteName}" ?`)) {
+                delete routePresets[currentRouteName];
+                currentRouteName = Object.keys(routePresets)[0];
+                steps = routePresets[currentRouteName];
+                currentStepIndex = steps.length > 0 ? 0 : -1;
+                saveStateToLocalStorage();
+                populateRouteSelector();
+                renderAll();
+            }
+        }
+
+        function updateOpacitySettings() {
+            settings.maxPastSteps = parseInt(document.getElementById('setting-tx-range').value, 10);
+            settings.maxFutureSteps = parseInt(document.getElementById('setting-tplus-range').value, 10);
+            settings.hideOutOfScope = document.getElementById('setting-hide-out-of-scope').checked;
+
+            document.getElementById('setting-tx-val').innerText = `${settings.maxPastSteps} étapes`;
+            document.getElementById('setting-tplus-val').innerText = `${settings.maxFutureSteps} étapes`;
+
+            saveStateToLocalStorage();
+            renderAll();
+        }
+
+        function exportJSON() {
+            const exportData = {
+                routeName: currentRouteName,
+                steps: steps,
+                settings: settings
+            };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `${currentRouteName.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    let importedSteps = [];
+                    let importedName = `Imported_${Date.now()}`;
+
+                    if (Array.isArray(imported)) {
+                        importedSteps = imported;
+                    } else if (imported.steps && Array.isArray(imported.steps)) {
+                        importedSteps = imported.steps;
+                        if (imported.routeName) importedName = imported.routeName;
+                    }
+
+                    routePresets[importedName] = importedSteps;
+                    switchRoutePreset(importedName);
+                } catch (err) {
+                    alert("Erreur lors de la lecture du fichier JSON.");
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function setupKeyboardShortcuts() {
+            window.addEventListener('keydown', function(e) {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+                if (e.key === 'ArrowLeft') {
+                    prevStep();
+                } else if (e.key === 'ArrowRight') {
+                    nextStep();
+                } else if (e.key.toLowerCase() === 's') {
+                    openSettingsModal();
+                }
+            });
+        }
+    </script>
+</body>
+</html>
