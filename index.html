@@ -13,7 +13,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
 
     <script>
         tailwind.config = {
@@ -141,14 +141,14 @@
 
         <!-- Top Right Actions & Settings -->
         <div class="flex items-center space-x-2">
-            <button onclick="exportJSON()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg font-medium transition border border-slate-700 flex items-center space-x-1" title="Exporter l'itinéraire courant (JSON)">
-                <i data-lucide="download" class="w-3.5 h-3.5"></i>
-                <span class="hidden sm:inline">Exporter</span>
+            <button onclick="exportJSON()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg font-medium transition border border-slate-700 flex items-center space-x-1" title="Sauvegarder l'itinéraire courant (fichier .json avec carte et réglages)">
+                <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">Sauvegarder</span>
             </button>
 
-            <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg font-medium transition border border-slate-700 flex items-center space-x-1" title="Importer un itinéraire (JSON)">
+            <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg font-medium transition border border-slate-700 flex items-center space-x-1" title="Ouvrir un fichier itinéraire (.json)">
                 <i data-lucide="upload" class="w-3.5 h-3.5"></i>
-                <span class="hidden sm:inline">Importer</span>
+                <span class="hidden sm:inline">Ouvrir</span>
                 <input type="file" id="json-loader" accept=".json" class="hidden" onchange="importJSON(event)">
             </label>
 
@@ -291,6 +291,29 @@
                     </div>
                 </div>
 
+                <!-- SECTION 1b: ITINÉRAIRES PARTAGÉS (dossier routes/) -->
+                <div class="space-y-3">
+                    <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center space-x-1.5">
+                        <i data-lucide="share-2" class="w-4 h-4"></i>
+                        <span>Itinéraires partagés (dossier routes/)</span>
+                    </h3>
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                        <div class="flex space-x-2">
+                            <select id="shared-route-selector" class="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-mono">
+                            </select>
+                            <button onclick="refreshRouteList()" title="Rescanner le dossier" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg transition border border-slate-700 shrink-0">
+                                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button onclick="loadSelectedSharedRoute()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition">Charger</button>
+                            <button onclick="copySharedRouteLink()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg font-medium transition border border-slate-700">Copier le lien</button>
+                        </div>
+                        <p id="route-scan-status" class="text-[10px] text-slate-500"></p>
+                        <p class="text-[10px] text-slate-500">Pour publier un itinéraire : bouton « Sauvegarder » en haut, puis dépose le fichier dans le dossier <code class="text-slate-400">routes/</code> du dépôt.</p>
+                    </div>
+                </div>
+
                 <!-- SECTION 2: CARTE EN FOND (scan automatique de ./images/maps/) -->
                 <div class="space-y-3">
                     <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center space-x-1.5">
@@ -379,15 +402,27 @@
         let availableMaps = [];   // noms de fichiers trouvés dans MAPS_DIR
         let scanMethod = '';
 
+        // Itinéraires partagés (fichiers .json déposés dans le dossier routes/ du dépôt)
+        const ROUTES_DIR = 'routes/';
+        const ROUTE_EXT = /\.json$/i;
+        let availableRoutes = [];
+        let routesScanMethod = '';
+
+        // Échappe le texte saisi par l'utilisateur avant de l'insérer dans du HTML
+        function esc(v) {
+            return String(v ?? '').replace(/[&<>"']/g, c =>
+                ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
         // Encode chaque segment du chemin (espaces, accents, #, ? ...) en gardant les "/"
         function toUrl(path) {
             return path.split('/').map(encodeURIComponent).join('/');
         }
 
         // Méthode 1 : page d'index du dossier (serveur local : python -m http.server, Live Server...)
-        async function listFromDirectoryIndex() {
+        async function listFromDirectoryIndex(dir, extRe) {
             try {
-                const res = await fetch(MAPS_DIR, { cache: 'no-store' });
+                const res = await fetch(dir, { cache: 'no-store' });
                 if (!res.ok) return [];
                 if (!(res.headers.get('content-type') || '').includes('text/html')) return [];
                 const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
@@ -395,12 +430,12 @@
                     const href = a.getAttribute('href').split('?')[0].split('#')[0];
                     try { return decodeURIComponent(href.split('/').filter(Boolean).pop() || ''); }
                     catch (e) { return ''; }
-                }).filter(n => MAP_EXT.test(n));
+                }).filter(n => extRe.test(n));
             } catch (e) { return []; }
         }
 
         // Méthode 2 : API GitHub (quand le site est hébergé sur GitHub Pages : user.github.io/repo/)
-        async function listFromGitHubApi() {
+        async function listFromGitHubApi(dir, extRe) {
             if (!location.hostname.endsWith('.github.io')) return [];
             const owner = location.hostname.split('.')[0];
             const segs = location.pathname.split('/').filter(Boolean);
@@ -409,54 +444,66 @@
             if (segs.length) candidates.push({ repo: segs[0], sub: segs.slice(1) });
             candidates.push({ repo: `${owner}.github.io`, sub: segs });
             for (const c of candidates) {
-                const path = [...c.sub, MAPS_DIR.replace(/\/$/, '')].join('/');
+                const path = [...c.sub, dir.replace(/\/$/, '')].join('/');
                 try {
                     const res = await fetch(`https://api.github.com/repos/${owner}/${c.repo}/contents/${path}`,
                         { headers: { Accept: 'application/vnd.github+json' } });
                     if (!res.ok) continue;
                     const data = await res.json();
                     if (Array.isArray(data)) {
-                        return data.filter(f => f.type === 'file' && MAP_EXT.test(f.name)).map(f => f.name);
+                        return data.filter(f => f.type === 'file' && extRe.test(f.name)).map(f => f.name);
                     }
                 } catch (e) { /* on essaie le candidat suivant */ }
             }
             return [];
         }
 
-        // Méthode 3 (secours, marche partout même en file://) : fichier images/maps/maps.js
-        // contenant :  window.MAPS_MANIFEST = ["carte1.png", "carte2.png"];
-        function listFromManifest() {
+        // Méthode 3 (secours) : fichier <dossier>/<manifestFile> contenant  window.<globalName> = ["a", "b"];
+        function listFromManifest(dir, manifestFile, globalName, extRe) {
             return new Promise(resolve => {
-                delete window.MAPS_MANIFEST;
+                delete window[globalName];
                 const sc = document.createElement('script');
-                sc.src = MAPS_DIR + 'maps.js?t=' + Date.now();
+                sc.src = dir + manifestFile + '?t=' + Date.now();
                 sc.onload = () => {
-                    const list = window.MAPS_MANIFEST;
+                    const list = window[globalName];
                     sc.remove();
-                    resolve(Array.isArray(list) ? list.filter(n => typeof n === 'string' && MAP_EXT.test(n)) : []);
+                    resolve(Array.isArray(list) ? list.filter(n => typeof n === 'string' && extRe.test(n)) : []);
                 };
                 sc.onerror = () => { sc.remove(); resolve([]); };
                 document.head.appendChild(sc);
             });
         }
 
-        async function scanMapsFolder() {
+        async function scanFolder(dir, extRe, manifestFile, globalName) {
             let names = [];
-            scanMethod = '';
+            let method = '';
             if (location.protocol !== 'file:') {
-                names = await listFromDirectoryIndex();
-                if (names.length) scanMethod = 'dossier';
+                names = await listFromDirectoryIndex(dir, extRe);
+                if (names.length) method = 'dossier';
                 if (!names.length) {
-                    names = await listFromGitHubApi();
-                    if (names.length) scanMethod = 'GitHub';
+                    names = await listFromGitHubApi(dir, extRe);
+                    if (names.length) method = 'GitHub';
                 }
             }
             if (!names.length) {
-                names = await listFromManifest();
-                if (names.length) scanMethod = 'maps.js';
+                names = await listFromManifest(dir, manifestFile, globalName, extRe);
+                if (names.length) method = manifestFile;
             }
-            availableMaps = [...new Set(names)].sort((a, b) =>
+            names = [...new Set(names)].sort((a, b) =>
                 a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+            return { names, method };
+        }
+
+        async function scanMapsFolder() {
+            const r = await scanFolder(MAPS_DIR, MAP_EXT, 'maps.js', 'MAPS_MANIFEST');
+            availableMaps = r.names;
+            scanMethod = r.method;
+        }
+
+        async function scanRoutesFolder() {
+            const r = await scanFolder(ROUTES_DIR, ROUTE_EXT, 'routes.js', 'ROUTES_MANIFEST');
+            availableRoutes = r.names;
+            routesScanMethod = r.method;
         }
 
         // Choisit la carte à afficher : celle sauvegardée si elle existe, sinon la première du dossier
@@ -491,8 +538,20 @@
         window.onload = async function() {
             lucide.createIcons();
             loadStateFromLocalStorage();
-            await scanMapsFolder();
+            await Promise.all([scanMapsFolder(), scanRoutesFolder()]);
             resolveCurrentMap();
+
+            // Lien direct vers un itinéraire partagé : ...index.html?route=mon_itineraire.json
+            const wantedRoute = new URLSearchParams(location.search).get('route');
+            if (wantedRoute) {
+                try {
+                    const route = await fetchSharedRoute(wantedRoute);
+                    if (confirmOverwrite(route)) applyRoute(route);
+                } catch (e) {
+                    alert(`Itinéraire « ${wantedRoute} » introuvable.\nS'il vient d'être ajouté, attends une minute que GitHub le publie.`);
+                }
+            }
+
             initLeafletMap();
             setupKeyboardShortcuts();
 
@@ -744,6 +803,11 @@
         function removeStep(index, event) {
             if (event) event.stopPropagation();
             steps.splice(index, 1);
+            // L'étape précédente est maintenant reliée à une autre : on recalcule sa courbe
+            if (index > 0 && steps[index - 1]) {
+                steps[index - 1].controlLat = null;
+                steps[index - 1].controlLng = null;
+            }
             if (currentStepIndex >= steps.length) {
                 currentStepIndex = steps.length - 1;
             }
@@ -766,6 +830,16 @@
                 saveStateToLocalStorage();
                 renderAll();
             }
+        }
+
+        // Pendant le glissement du curseur : mise à jour "à vif" sans reconstruire l'interface
+        function liveZoneRadius(index, el) {
+            const v = parseInt(el.value, 10);
+            if (!steps[index] || isNaN(v)) return;
+            steps[index].zoneRadius = v;
+            if (el.nextElementSibling) el.nextElementSibling.innerText = `${v} px`;
+            const circle = searchZoneLayers.find(z => z._stepIndex === index);
+            if (circle) circle.setRadius(v);
         }
 
         function updateStepZoneRadius(index, radiusVal) {
@@ -979,6 +1053,7 @@
                         renderAll();
                     });
 
+                    circleZone._stepIndex = index;
                     searchZoneLayers.push(circleZone);
                 }
             });
@@ -998,7 +1073,7 @@
                         </div>
                         ${step.title ? `
                             <div class="absolute left-10 whitespace-nowrap bg-slate-900/90 text-slate-100 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-700 shadow-xl pointer-events-none">
-                                ${step.title} ${step.hasZone ? '<span class="text-amber-400 ml-1">🔍 Zone</span>' : ''}
+                                ${esc(step.title)} ${step.hasZone ? '<span class="text-amber-400 ml-1">🔍 Zone</span>' : ''}
                             </div>
                         ` : ''}
                     </div>
@@ -1083,7 +1158,7 @@
                             <span class="w-5 h-5 rounded-md ${isSelected ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-slate-700 text-slate-300'} flex items-center justify-center text-[10px] font-mono shrink-0">
                                 ${index + 1}
                             </span>
-                            <input type="text" value="${step.title}" 
+                            <input type="text" value="${esc(step.title)}" 
                                 onclick="event.stopPropagation()"
                                 onchange="updateStepDetails(${index}, 'title', this.value)"
                                 class="bg-transparent border-b border-transparent hover:border-slate-700 focus:border-emerald-500 focus:bg-slate-950/50 text-xs font-medium focus:outline-none px-1 rounded text-slate-100 w-36 truncate">
@@ -1098,7 +1173,7 @@
                         </div>
                     </div>
 
-                    <input type="text" placeholder="+ Note / Action (ex: Prendre TP, Parchm...)" value="${step.note}" 
+                    <input type="text" placeholder="+ Note / Action (ex: Prendre TP, Parchm...)" value="${esc(step.note)}" 
                         onclick="event.stopPropagation()"
                         onchange="updateStepDetails(${index}, 'note', this.value)"
                         class="bg-slate-950/40 text-[11px] text-slate-400 border border-slate-800/80 rounded px-2 py-1 focus:outline-none focus:border-slate-700">
@@ -1123,7 +1198,7 @@
                     ${step.hasZone ? `
                         <div class="bg-slate-950/80 p-2 rounded-lg border border-amber-500/30 flex items-center justify-between space-x-2 text-[10px]" onclick="event.stopPropagation()">
                             <span class="text-amber-400 font-medium shrink-0">Rayon zone :</span>
-                            <input type="range" min="50" max="1000" step="25" value="${step.zoneRadius || 250}" oninput="updateStepZoneRadius(${index}, this.value)" class="w-full h-1.5 bg-slate-800 rounded appearance-none cursor-pointer accent-amber-500">
+                            <input type="range" min="50" max="1000" step="25" value="${step.zoneRadius || 250}" oninput="liveZoneRadius(${index}, this)" onchange="updateStepZoneRadius(${index}, this.value)" class="w-full h-1.5 bg-slate-800 rounded appearance-none cursor-pointer accent-amber-500">
                             <span class="text-slate-300 font-mono shrink-0">${step.zoneRadius || 250} px</span>
                         </div>
                     ` : ''}
@@ -1229,6 +1304,7 @@
 
             populateRouteSelector();
             populateMapPresets();
+            populateSharedRoutes();
             document.getElementById('settings-modal').classList.remove('hidden');
         }
 
@@ -1358,19 +1434,131 @@
             renderAll();
         }
 
+        // ----- Sauvegarde / chargement d'un itinéraire (fichier .json) -----
+
+        // Signature comparable d'une liste d'étapes (pour détecter une modification locale)
+        function stepsSignature(list) {
+            return JSON.stringify((list || []).map(t => [t.lat, t.lng, t.title, t.note,
+                t.controlLat, t.controlLng, !!t.hasZone, t.zoneRadius]));
+        }
+
+        // Valide et nettoie les données d'un fichier (ancien format ou nouveau)
+        function normalizeRoute(data, fallbackName) {
+            const rawSteps = Array.isArray(data) ? data : (data && Array.isArray(data.steps) ? data.steps : null);
+            if (!rawSteps) throw new Error('format');
+            const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
+            const cleanSteps = [];
+            rawSteps.forEach(t => {
+                if (!t) return;
+                const lat = num(t.lat), lng = num(t.lng);
+                if (lat === null || lng === null) return;
+                const cLat = num(t.controlLat), cLng = num(t.controlLng);
+                const hasCtrl = cLat !== null && cLng !== null;
+                cleanSteps.push({
+                    id: Date.now() + Math.random(),
+                    lat, lng,
+                    title: String(t.title ?? '').slice(0, 120),
+                    note: String(t.note ?? '').slice(0, 500),
+                    controlLat: hasCtrl ? cLat : null,
+                    controlLng: hasCtrl ? cLng : null,
+                    hasZone: !!t.hasZone,
+                    zoneRadius: Math.min(1000, Math.max(50, parseInt(t.zoneRadius, 10) || 250))
+                });
+            });
+
+            const obj = (data && !Array.isArray(data)) ? data : {};
+            const name = String(obj.name || obj.routeName || fallbackName || `Imported_${Date.now()}`).trim().slice(0, 80)
+                || `Imported_${Date.now()}`;
+
+            // Carte associée (on n'accepte que des chemins dans images/maps/)
+            let map = obj.map || (obj.settings && obj.settings.mapImagePath) || null;
+            if (typeof map !== 'string' || !map.startsWith(MAPS_DIR) || map.includes('..')) map = null;
+
+            // Réglages d'opacité (facultatifs)
+            let opacity = null;
+            if (obj.settings && typeof obj.settings === 'object') {
+                const clamp = (v, def) => {
+                    const n = parseInt(v, 10);
+                    return isNaN(n) ? def : Math.min(10, Math.max(0, n));
+                };
+                opacity = {
+                    maxPastSteps: clamp(obj.settings.maxPastSteps, settings.maxPastSteps),
+                    maxFutureSteps: clamp(obj.settings.maxFutureSteps, settings.maxFutureSteps),
+                    hideOutOfScope: !!obj.settings.hideOutOfScope
+                };
+            }
+            return { name, steps: cleanSteps, map, opacity };
+        }
+
+        // Si un itinéraire local du même nom existe et diffère, demande confirmation
+        function confirmOverwrite(route) {
+            const local = routePresets[route.name];
+            if (!local) return true;
+            if (stepsSignature(local) === stepsSignature(route.steps)) return true;
+            return confirm(`Un itinéraire local nommé « ${route.name} » existe déjà et diffère de ce fichier.\nLe remplacer ?`);
+        }
+
+        // Applique l'itinéraire (étapes + carte + réglages). Retourne true si la carte a changé.
+        function applyRoute(route) {
+            routePresets[currentRouteName] = steps;
+            routePresets[route.name] = route.steps;
+            currentRouteName = route.name;
+            steps = route.steps;
+            currentStepIndex = steps.length > 0 ? 0 : -1;
+
+            if (route.opacity) Object.assign(settings, route.opacity);
+
+            let mapChanged = false;
+            if (route.map && route.map !== settings.mapImagePath) {
+                const known = availableMaps.length === 0 || availableMaps.includes(route.map.slice(MAPS_DIR.length));
+                if (known) {
+                    settings.mapImagePath = route.map;
+                    currentImageUrl = toUrl(route.map);
+                    mapChanged = true;
+                } else {
+                    console.warn('Carte de l\'itinéraire introuvable dans le dossier :', route.map);
+                }
+            }
+
+            saveStateToLocalStorage();
+            if (mapChanged) {
+                localStorage.removeItem('route_planner_map_center');
+                localStorage.removeItem('route_planner_map_zoom');
+            }
+            return mapChanged;
+        }
+
+        // Applique et rafraîchit l'affichage (utilisé une fois la carte déjà lancée)
+        function applyRouteLive(route) {
+            const mapChanged = applyRoute(route);
+            if (mapChanged) initLeafletMap(); else renderAll();
+            populateRouteSelector();
+        }
+
+        // Télécharge l'itinéraire courant : étapes + carte + réglages d'opacité
         function exportJSON() {
-            const exportData = {
-                routeName: currentRouteName,
-                steps: steps,
-                settings: settings
+            const data = {
+                version: 1,
+                name: currentRouteName,
+                map: settings.mapImagePath || null,
+                settings: {
+                    maxPastSteps: settings.maxPastSteps,
+                    maxFutureSteps: settings.maxFutureSteps,
+                    hideOutOfScope: settings.hideOutOfScope
+                },
+                steps: steps
             };
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
-            const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `${currentRouteName.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}.json`);
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
+            const slug = currentRouteName.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'itineraire';
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${slug}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
 
         function importJSON(event) {
@@ -1380,24 +1568,85 @@
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    const imported = JSON.parse(e.target.result);
-                    let importedSteps = [];
-                    let importedName = `Imported_${Date.now()}`;
-
-                    if (Array.isArray(imported)) {
-                        importedSteps = imported;
-                    } else if (imported.steps && Array.isArray(imported.steps)) {
-                        importedSteps = imported.steps;
-                        if (imported.routeName) importedName = imported.routeName;
-                    }
-
-                    routePresets[importedName] = importedSteps;
-                    switchRoutePreset(importedName);
+                    const route = normalizeRoute(JSON.parse(e.target.result), file.name.replace(/\.json$/i, ''));
+                    if (confirmOverwrite(route)) applyRouteLive(route);
                 } catch (err) {
                     alert("Erreur lors de la lecture du fichier JSON.");
                 }
             };
             reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        // ----- Itinéraires partagés (dossier routes/) -----
+
+        async function fetchSharedRoute(file) {
+            if (location.protocol === 'file:') throw new Error('file');
+            const res = await fetch(ROUTES_DIR + encodeURIComponent(file) + '?t=' + Date.now(), { cache: 'no-store' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return normalizeRoute(await res.json(), file.replace(/\.json$/i, ''));
+        }
+
+        function populateSharedRoutes() {
+            const selector = document.getElementById('shared-route-selector');
+            const status = document.getElementById('route-scan-status');
+            if (!selector) return;
+            selector.innerHTML = '';
+
+            if (!availableRoutes.length) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.innerText = 'Aucun itinéraire partagé';
+                selector.appendChild(option);
+                selector.disabled = true;
+                status.innerText = location.protocol === 'file:'
+                    ? "Indisponible en ouverture directe (file://). Utilise le bouton Importer."
+                    : "Aucun fichier .json trouvé dans routes/.";
+                return;
+            }
+
+            selector.disabled = false;
+            availableRoutes.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.innerText = name.replace(/\.json$/i, '');
+                selector.appendChild(option);
+            });
+            status.innerText = `${availableRoutes.length} itinéraire(s) partagé(s) (${routesScanMethod})`;
+        }
+
+        async function refreshRouteList() {
+            document.getElementById('route-scan-status').innerText = 'Analyse du dossier...';
+            await scanRoutesFolder();
+            populateSharedRoutes();
+        }
+
+        async function loadSelectedSharedRoute() {
+            const file = document.getElementById('shared-route-selector').value;
+            if (!file) return;
+            try {
+                const route = await fetchSharedRoute(file);
+                if (!confirmOverwrite(route)) return;
+                applyRouteLive(route);
+                closeSettingsModal();
+            } catch (e) {
+                alert("Impossible de charger cet itinéraire.\nS'il vient d'être ajouté, attends une minute que GitHub le publie, puis réessaie.");
+            }
+        }
+
+        function copySharedRouteLink() {
+            const file = document.getElementById('shared-route-selector').value;
+            if (!file) return;
+            const link = location.origin + location.pathname + '?route=' + encodeURIComponent(file);
+            const status = document.getElementById('route-scan-status');
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(link).then(
+                    () => { status.innerText = 'Lien copié dans le presse-papiers.'; },
+                    () => prompt('Copie ce lien :', link)
+                );
+            } else {
+                prompt('Copie ce lien :', link);
+            }
         }
 
         function setupKeyboardShortcuts() {
