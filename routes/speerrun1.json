@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "name": "SpeerRun1",
+  "map": "images/maps/Aion2_Asmo.png",
+  "settings": {
+    "maxPastSteps": 3,
+    "maxFutureSteps": 3,
+    "hideOutOfScope": false
+  },
+  "steps": [
+    {
+      "id": 1789816263073.9954,
+      "lat": 5450.732622776502,
+      "lng": 3332.6253185094597,
+      "title": "Étape 1",
+      "note": "",
+      "controlLat": 5440.479574449297,
+      "controlLng": 3350.6259716984364,
+      "hasZone": false,
+      "zoneRadius": 250
+    },
+    {
+      "id": 1789816264424.5388,
+      "lat": 5441.893788011669,
+      "lng": 3372.2613143443937,
+      "title": "Étape 2",
+      "note": "",
+      "controlLat": 5429.519419340905,
+      "controlLng": 3334.7153844573654,
+      "hasZone": false,
+      "zoneRadius": 250
+    },
+    {
+      "id": 1789816268485.052,
+      "lat": 5435.883380371583,
+      "lng": 3295.925765583411,
+      "title": "Étape 3",
+      "note": "",
+      "controlLat": 5425.983885434972,
+      "controlLng": 3277.358833071472,
+      "hasZone": false,
+      "zoneRadius": 250
+    },
+    {
+      "id": 1789816271940.3599,
+      "lat": 5416.08439049836,
+      "lng": 3258.7919005595327,
+      "title": "Étape 4",
+      "note": "",
+      "controlLat": 5399.997711226366,
+      "controlLng": 3240.583803134783,
+      "hasZone": false,
+      "zoneRadius": 250
+    },
+    {
+      "id": 1789816275633.8801,
+      "lat": 5431.287186293871,
+      "lng": 3240.7552981334834,
+      "title": "Étape 5",
+      "note": "",
+      "controlLat": 5406.892002342935,
+      "controlLng": 3230.8560966244604,
+      "hasZone": false,
+      "zoneRadius": 250
+    },
+    {
+      "id": 1789816276717.4492,
+      "lat": 5382.496818391999,
+      "lng": 3220.9568951154374,
+      "title": "Étape 6",
+      "note": "",
+      "controlLat": 5361.637168346996,
+      "controlLng": 3223.074889946326,
+      "hasZone": false,
+      "zoneRadius": 250
+    },
+    {
+      "id": 1789816281546.3916,
+      "lat": 5340.777518301993,
+      "lng": 3225.192884777214,
+      "title": "Étape 7",
+      "note": "",
+      "controlLat": 5303.654412289699,
+      "controlLng": 3188.080635585701,
+      "hasZone": false,
+      "zoneRadius": 250
+    },
+    {
+      "id": 1789816288393.5466,
+      "lat": 5266.531306277406,
+      "lng": 3150.9683863941877,
+      "title": "Étape 8",
+      "note": "",
+      "controlLat": 5259.46023846554,
+      "controlLng": 3169.161078870533,
+      "hasZone": false,
+      "zoneRadius": 250
+    },
+    {
+      "id": 1789816289188.936,
+      "lat": 5252.389170653674,
+      "lng": 3187.3537713468777,
+      "title": "Étape 9",
+      "note": "",
+      "controlLat": 5241.429015545284,
+      "controlLng": 3173.7507197320983,
+      "hasZone": false,
+      "zoneRadius": 250
+    },
+    {
+      "id": 1789816289871.553,
+      "lat": 5230.468860436892,
+      "lng": 3160.147668117319,
+      "title": "Étape 10",
+      "note": "",
+      "controlLat": null,
+      "controlLng": null,
+      "hasZone": false,
+      "zoneRadius": 250
+    }
+  ]
+}
