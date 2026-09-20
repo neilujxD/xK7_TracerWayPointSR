@@ -1197,9 +1197,9 @@
                         <div class="w-8 h-8 rounded-full ${isCurrent ? 'bg-emerald-500 text-slate-950 font-black shadow-lg shadow-emerald-500/50 scale-110' : 'bg-slate-900 border-2 border-emerald-400 text-emerald-400 font-bold'} flex items-center justify-center text-xs shadow-md transition-all">
                             ${index + 1}
                         </div>
-                        ${step.title ? `
-                            <div class="absolute left-10 whitespace-nowrap bg-slate-900/90 text-slate-100 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-700 shadow-xl pointer-events-none">
-                                ${esc(step.title)} ${step.hasZone ? '<span class="text-amber-400 ml-1">🔍 Zone</span>' : ''}
+                        ${(step.note || '').trim() ? `
+                            <div class="absolute left-10 w-max max-w-[240px] whitespace-normal break-words leading-snug bg-slate-900/90 text-slate-100 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-700 shadow-xl pointer-events-none">
+                                ${esc(step.note.trim())} ${step.hasZone ? '<span class="text-amber-400 ml-1">🔍 Zone</span>' : ''}
                             </div>
                         ` : ''}
                     </div>
