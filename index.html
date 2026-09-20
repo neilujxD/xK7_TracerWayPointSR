@@ -334,6 +334,18 @@
                     </div>
                 </div>
 
+                <!-- SECTION 2b: REPÈRES (calques) -->
+                <div class="space-y-3">
+                    <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center space-x-1.5">
+                        <i data-lucide="map-pin" class="w-4 h-4"></i>
+                        <span>Repères sur la carte</span>
+                    </h3>
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                        <div id="marker-layers-list" class="space-y-2"></div>
+                        <p id="marker-layers-status" class="text-[10px] text-slate-500"></p>
+                    </div>
+                </div>
+
                 <!-- SECTION 3: REGLAGES D'OPACITE PAS A PAS -->
                 <div class="space-y-3">
                     <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center space-x-1.5">
@@ -391,6 +403,7 @@
         // Settings State
         let settings = {
             mapImagePath: '',    // ex: 'images/maps/ma_carte.png' (chemin relatif)
+            hiddenMarkerLayers: [],   // ids des calques de repères masqués
             maxPastSteps: 3,     // T-x
             maxFutureSteps: 3,   // T+x
             hideOutOfScope: false
@@ -412,6 +425,114 @@
         function esc(v) {
             return String(v ?? '').replace(/[&<>"']/g, c =>
                 ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // ----- Repères (plumes, téléporteurs, donjons...) : fichier markers/<nom_de_la_carte>.json -----
+        // Format : { "layers": [ { "id":"plumes", "label":"Plumes", "color":"#ef4444",
+        //            "points": [ [x, y], [x, y, "Nom facultatif"], ... ] } ] }
+        // x et y sont des proportions de la taille de l'image (0 à 1, origine en haut à gauche).
+        const MARKERS_DIR = 'markers/';
+        let markerGroups = {};      // id -> L.layerGroup
+        let markerLayerDefs = [];   // { id, label, color, count }
+        let markerLoadToken = 0;
+
+        function currentMapBase() {
+            const file = (settings.mapImagePath || '').split('/').pop() || '';
+            return file.replace(/\.[^.]+$/, '');
+        }
+
+        async function loadMarkersForCurrentMap() {
+            const token = ++markerLoadToken;
+            const thisMap = map;
+            markerGroups = {};
+            markerLayerDefs = [];
+
+            const base = currentMapBase();
+            let data = null;
+            if (base && location.protocol !== 'file:') {
+                try {
+                    const res = await fetch(MARKERS_DIR + encodeURIComponent(base) + '.json?t=' + Date.now(), { cache: 'no-store' });
+                    if (res.ok) data = await res.json();
+                } catch (e) { /* pas de fichier de repères pour cette carte */ }
+            }
+            if (token !== markerLoadToken || thisMap !== map) return;   // la carte a changé entre-temps
+
+            if (data && Array.isArray(data.layers)) {
+                if (!thisMap.getPane('poiPane')) thisMap.createPane('poiPane').style.zIndex = 350;
+                const renderer = L.canvas({ pane: 'poiPane' });
+                const h = mapImageBounds[1][0], w = mapImageBounds[1][1];
+
+                data.layers.forEach(layer => {
+                    if (!layer || typeof layer.id !== 'string' || !Array.isArray(layer.points)) return;
+                    const color = /^#[0-9a-f]{3,8}$/i.test(layer.color || '') ? layer.color : '#ef4444';
+                    const group = L.layerGroup();
+                    let count = 0;
+                    layer.points.forEach(pt => {
+                        if (!Array.isArray(pt)) return;
+                        const nx = Number(pt[0]), ny = Number(pt[1]);
+                        if (!isFinite(nx) || !isFinite(ny)) return;
+                        const lat = (1 - ny) * h, lng = nx * w;
+                        const name = typeof pt[2] === 'string' ? pt[2] : '';
+                        const dot = L.circleMarker([lat, lng], {
+                            renderer, radius: 6, color: '#ffffff', weight: 1.5,
+                            fillColor: color, fillOpacity: 0.95, bubblingMouseEvents: false
+                        });
+                        if (name) {
+                            const tip = document.createElement('span');   // texte brut : pas d'interprétation HTML
+                            tip.textContent = name;
+                            dot.bindTooltip(tip, { direction: 'top' });
+                        }
+                        // En mode édition : un clic sur un repère place l'étape pile dessus
+                        dot.on('click', () => { if (currentMode === 'edit') addStep(lat, lng, name); });
+                        group.addLayer(dot);
+                        count++;
+                    });
+                    markerGroups[layer.id] = group;
+                    markerLayerDefs.push({ id: layer.id, label: String(layer.label || layer.id), color, count });
+                    if (!settings.hiddenMarkerLayers.includes(layer.id)) group.addTo(thisMap);
+                });
+            }
+            populateMarkerLayers();
+        }
+
+        function toggleMarkerLayer(id, visible) {
+            const group = markerGroups[id];
+            if (!group || !map) return;
+            const hidden = new Set(settings.hiddenMarkerLayers);
+            if (visible) { hidden.delete(id); group.addTo(map); }
+            else { hidden.add(id); map.removeLayer(group); }
+            settings.hiddenMarkerLayers = [...hidden];
+            saveStateToLocalStorage();
+        }
+
+        function populateMarkerLayers() {
+            const box = document.getElementById('marker-layers-list');
+            const status = document.getElementById('marker-layers-status');
+            if (!box || !status) return;
+            box.innerHTML = '';
+            if (!markerLayerDefs.length) {
+                status.innerText = location.protocol === 'file:'
+                    ? "Repères indisponibles en ouverture directe (file://)."
+                    : `Aucun repère pour cette carte (fichier ${MARKERS_DIR}${currentMapBase() || 'nom_de_la_carte'}.json).`;
+                return;
+            }
+            markerLayerDefs.forEach(def => {
+                const label = document.createElement('label');
+                label.className = 'flex items-center space-x-2 text-xs text-slate-200 cursor-pointer';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.className = 'accent-emerald-500';
+                cb.checked = !settings.hiddenMarkerLayers.includes(def.id);
+                cb.onchange = () => toggleMarkerLayer(def.id, cb.checked);
+                const dot = document.createElement('span');
+                dot.className = 'inline-block w-3 h-3 rounded-full border border-white shrink-0';
+                dot.style.background = def.color;
+                const txt = document.createElement('span');
+                txt.textContent = `${def.label} (${def.count})`;
+                label.append(cb, dot, txt);
+                box.appendChild(label);
+            });
+            status.innerText = "En mode édition, un clic sur un repère place l'étape pile dessus.";
         }
 
         // Encode chaque segment du chemin (espaces, accents, #, ? ...) en gardant les "/"
@@ -569,6 +690,7 @@
                 }
                 // Nettoyage des anciennes versions (liste de cartes figée, "Image locale: ...")
                 delete settings.mapPresets;
+                if (!Array.isArray(settings.hiddenMarkerLayers)) settings.hiddenMarkerLayers = [];
                 if (typeof settings.mapImagePath !== 'string' || !settings.mapImagePath.startsWith(MAPS_DIR)) {
                     settings.mapImagePath = '';
                 }
@@ -685,13 +807,17 @@
                 attributionControl: false
             });
 
+            // Ordre des couches : image de fond (200) < repères (350) < tracés de l'itinéraire (400) < étapes (600)
+            map.createPane('mapImagePane').style.zIndex = 200;
+
             const img = new Image();
             img.onload = function() {
                 const w = this.naturalWidth || 4000;
                 const h = this.naturalHeight || 4000;
                 mapImageBounds = [[0, 0], [h, w]];
 
-                L.imageOverlay(currentImageUrl, mapImageBounds).addTo(map);
+                L.imageOverlay(currentImageUrl, mapImageBounds, { pane: 'mapImagePane' }).addTo(map);
+                loadMarkersForCurrentMap();
 
                 // Dynamically calculate zoom bounds to allow proper zoom in/out
                 const fitZoom = map.getBoundsZoom(mapImageBounds, true);
@@ -734,7 +860,7 @@
                 console.warn("Image introuvable :", failedPath);
                 currentImageUrl = generateProceduralDemoMap();
                 mapImageBounds = [[0, 0], [4000, 4000]];
-                L.imageOverlay(currentImageUrl, mapImageBounds).addTo(map);
+                L.imageOverlay(currentImageUrl, mapImageBounds, { pane: 'mapImagePane' }).addTo(map);
 
                 const fitZoom = map.getBoundsZoom(mapImageBounds, true);
                 const minZoom = Math.floor(fitZoom) - 2;
@@ -1305,6 +1431,7 @@
             populateRouteSelector();
             populateMapPresets();
             populateSharedRoutes();
+            populateMarkerLayers();
             document.getElementById('settings-modal').classList.remove('hidden');
         }
 
