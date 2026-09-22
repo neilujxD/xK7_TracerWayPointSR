@@ -14,7 +14,7 @@ function switchWorkspace(workspace) {
 
     appWorkspace = workspace;
     document.getElementById('route-sidebar').classList.toggle('hidden', workspace !== 'route');
-    document.getElementById('tactical-sidebar').classList.toggle('hidden', workspace !== 'tactical');
+    document.getElementById('tactical-sidebar').classList.toggle('hidden', workspace !== 'tactical' || tacticalMode === 'present');
     document.getElementById('route-mode-controls').classList.toggle('hidden', workspace !== 'route');
     document.getElementById('tactical-mode-controls').classList.toggle('hidden', workspace !== 'tactical');
     document.getElementById('route-bottom-controls').classList.toggle('hidden', workspace !== 'route');
@@ -76,6 +76,9 @@ function renderTacticalHeader() {
 function setTacticalMode(mode) {
     tacticalMode = mode === 'present' ? 'present' : 'edit';
     if (tacticalMode === 'present') tacticalTool = 'route';
+    const sidebar = document.getElementById('tactical-sidebar');
+    if (sidebar) sidebar.classList.toggle('hidden', tacticalMode === 'present');
+    if (map) setTimeout(() => map.invalidateSize(), 0);
     renderTacticalAll();
 }
 
