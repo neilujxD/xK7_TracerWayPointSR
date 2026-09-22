@@ -33,9 +33,9 @@ function switchWorkspace(workspace) {
     if (workspace === 'tactical') {
         routeWorkspaceMapPath = routeWorkspaceMapPath || settings.mapImagePath || '';
         if (!tacticalStrategy.map) tacticalStrategy.map = routeWorkspaceMapPath;
-        if (tacticalStrategy.map && tacticalStrategy.map !== settings.mapImagePath) {
-            settings.mapImagePath = tacticalStrategy.map;
-            currentImageUrl = toUrl(tacticalStrategy.map);
+        const tacticalUrl = tacticalStrategy.map ? toUrl(tacticalStrategy.map) : '';
+        if (tacticalUrl && tacticalUrl !== currentImageUrl) {
+            currentImageUrl = tacticalUrl;
             initLeafletMap();
         } else {
             renderTacticalAll();
@@ -43,9 +43,9 @@ function switchWorkspace(workspace) {
     } else {
         clearTacticalLayers();
         const routeMap = routeWorkspaceMapPath || settings.mapImagePath;
-        if (routeMap && routeMap !== settings.mapImagePath) {
-            settings.mapImagePath = routeMap;
-            currentImageUrl = toUrl(routeMap);
+        const routeUrl = routeMap ? toUrl(routeMap) : '';
+        if (routeUrl && routeUrl !== currentImageUrl) {
+            currentImageUrl = routeUrl;
             initLeafletMap();
         } else {
             renderAll();
@@ -297,8 +297,7 @@ function tacticalImportJSON(event) {
             tacticalActivePhaseId = tacticalStrategy.phases[0].id;
             tacticalActiveGroupId = tacticalStrategy.groups[0].id;
             tacticalFocusGroupId = 'all';
-            if (tacticalStrategy.map && tacticalStrategy.map !== settings.mapImagePath) {
-                settings.mapImagePath = tacticalStrategy.map;
+            if (tacticalStrategy.map) {
                 currentImageUrl = toUrl(tacticalStrategy.map);
                 initLeafletMap();
             }
