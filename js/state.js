@@ -27,3 +27,6 @@ let currentStepIndex = -1;
 
 // Plage temporairement conservée après un saut rapide vers l'avant.
 let navigationCarryRange = null;
+
+// Carte du mode Route conservée indépendamment du Tactical Map.
+let routeWorkspaceMapPath = '';
