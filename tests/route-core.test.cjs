@@ -67,3 +67,21 @@ test('exported routes use schema V2 and clamp settings', () => {
     assert.equal(data.settings.maxFutureSteps, 0);
     assert.equal(data.settings.hideOutOfScope, true);
 });
+
+
+test('automatic titles are renumbered while custom titles are preserved', () => {
+    const route = RouteCore.normalizeRouteData({
+        name: 'Numbering',
+        steps: [
+            { lat: 1, lng: 1, title: 'Étape 1' },
+            { lat: 2, lng: 2, title: '' },
+            { lat: 3, lng: 3, title: 'Étape 2' },
+            { lat: 4, lng: 4, title: 'Prendre le TP' }
+        ]
+    }, { mapsDir: 'images/maps/' });
+
+    assert.equal(route.steps[0].title, 'Étape 1');
+    assert.equal(route.steps[1].title, 'Étape 2');
+    assert.equal(route.steps[2].title, 'Étape 3');
+    assert.equal(route.steps[3].title, 'Prendre le TP');
+});
