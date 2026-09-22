@@ -1,5 +1,13 @@
 
 function renderAll() {
+    if (appWorkspace === 'tactical') {
+        renderTacticalAll();
+        return;
+    }
+
+    const workspaceTitle = document.getElementById('workspace-title');
+    if (workspaceTitle) workspaceTitle.innerText = 'Route Map Navigator Pro';
+
     // Update Active Route Badge
     document.getElementById('active-route-badge').innerText = currentRouteName;
 
