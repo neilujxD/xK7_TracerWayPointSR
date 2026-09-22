@@ -424,7 +424,6 @@ function renderStepBanner() {
         badge.innerText = 'T - 0';
         titleEl.innerText = 'Aucune étape créée';
         noteEl.innerText = 'Cliquez sur la carte ou ouvrez les paramètres.';
-        updateMediaSession();
         return;
     }
 
@@ -432,5 +431,4 @@ function renderStepBanner() {
     badge.innerText = `T - ${currentStepIndex + 1}`;
     titleEl.innerText = current.title + (current.hasZone ? ' (Zone de fouille active)' : '');
     noteEl.innerText = current.note ? `Note : ${current.note}` : 'Aucune note particulière';
-    updateMediaSession();
 }
