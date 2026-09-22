@@ -89,26 +89,33 @@ test('automatic titles are renumbered while custom titles are preserved', () => 
 
 const TacticalCore = require('../js/tactical-core.js');
 
-test('tactical strategies keep independent group paths for each phase', () => {
+test('tactical strategies keep independent group tracks for each phase', () => {
     const strategy = TacticalCore.createStrategy('War plan', 'images/maps/Altgard.webp');
     const phase2 = TacticalCore.addPhase(strategy, 'Engagement');
     const blue = TacticalCore.addGroup(strategy, 'Groupe Bleu', '#3b82f6');
 
-    strategy.groups[0].paths[phase2.id].push({ lat: 10, lng: 20 });
-    blue.paths[phase2.id].push({ lat: 30, lng: 40 });
+    TacticalCore.startTrack(strategy.groups[0], phase2.id, { lat: 10, lng: 20 });
+    TacticalCore.startTrack(blue, phase2.id, { lat: 30, lng: 40 });
 
     assert.equal(strategy.groups[0].paths[phase2.id].length, 1);
     assert.equal(blue.paths[phase2.id].length, 1);
     assert.notDeepEqual(strategy.groups[0].paths[phase2.id], blue.paths[phase2.id]);
 });
 
-test('shared tactical segments report all owning groups', () => {
+test('shared tactical segments report all owning groups across tracks', () => {
     const strategy = TacticalCore.createStrategy('Shared', '');
     const phaseId = strategy.phases[0].id;
     const red = strategy.groups[0];
     const blue = TacticalCore.addGroup(strategy, 'Bleu', '#3b82f6');
-    red.paths[phaseId] = [{ lat: 1, lng: 1 }, { lat: 2, lng: 2 }];
-    blue.paths[phaseId] = [{ lat: 1, lng: 1 }, { lat: 2, lng: 2 }];
+
+    red.paths[phaseId] = [[
+        { lat: 1, lng: 1, controlLat: null, controlLng: null },
+        { lat: 2, lng: 2, controlLat: null, controlLng: null }
+    ]];
+    blue.paths[phaseId] = [[
+        { lat: 1, lng: 1, controlLat: null, controlLng: null },
+        { lat: 2, lng: 2, controlLat: null, controlLng: null }
+    ]];
 
     const owners = TacticalCore.segmentOwners(
         strategy, phaseId,
@@ -118,14 +125,44 @@ test('shared tactical segments report all owning groups', () => {
     assert.deepEqual(owners.map(group => group.id).sort(), [red.id, blue.id].sort());
 });
 
-test('shared tactical group colors are mixed deterministically', () => {
+test('two tactical group colors mix while three or more use black', () => {
     assert.equal(TacticalCore.mixColors(['#ff0000', '#0000ff']), '#800080');
+    assert.equal(TacticalCore.mixColors(['#ff0000', '#0000ff', '#00ff00']), '#050505');
 });
 
-test('tactical normalization removes invalid path points and memberships', () => {
+test('legacy Tactical V1 flat paths migrate to branchable V2 tracks', () => {
+    const strategy = TacticalCore.createStrategy('Legacy', '');
+    const group = strategy.groups[0];
+    const phase = strategy.phases[0];
+
+    const normalized = TacticalCore.normalizeStrategy({
+        version: 1,
+        name: 'Legacy',
+        phases: [phase],
+        groups: [{
+            id: group.id,
+            name: group.name,
+            color: group.color,
+            paths: {
+                [phase.id]: [
+                    { lat: 10, lng: 20 },
+                    { lat: 30, lng: 40 }
+                ]
+            }
+        }],
+        points: []
+    }, '');
+
+    assert.equal(normalized.version, 2);
+    assert.equal(normalized.groups[0].paths[phase.id].length, 1);
+    assert.equal(normalized.groups[0].paths[phase.id][0].length, 2);
+});
+
+test('tactical normalization removes invalid nodes and memberships', () => {
     const strategy = TacticalCore.createStrategy('Normalize', '');
     const group = strategy.groups[0];
     const phase = strategy.phases[0];
+
     const normalized = TacticalCore.normalizeStrategy({
         name: 'Imported',
         map: 'images/maps/Altgard.webp',
@@ -135,10 +172,10 @@ test('tactical normalization removes invalid path points and memberships', () =>
             name: group.name,
             color: group.color,
             paths: {
-                [phase.id]: [
-                    { lat: 10, lng: 20 },
+                [phase.id]: [[
+                    { lat: 10, lng: 20, controlLat: 11, controlLng: 21 },
                     { lat: 'bad', lng: 20 }
-                ]
+                ]]
             }
         }],
         points: [{
@@ -152,6 +189,7 @@ test('tactical normalization removes invalid path points and memberships', () =>
         }]
     }, '');
 
-    assert.equal(normalized.groups[0].paths[phase.id].length, 1);
+    assert.equal(normalized.groups[0].paths[phase.id][0].length, 1);
+    assert.equal(normalized.groups[0].paths[phase.id][0][0].controlLat, 11);
     assert.deepEqual(normalized.points[0].groupIds, [group.id]);
 });
