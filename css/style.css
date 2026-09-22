@@ -69,3 +69,127 @@
         cursor: grabbing;
         transform: scale(1.2);
     }
+
+
+/* Workspace selector */
+.workspace-switch {
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #94a3b8;
+    transition: 150ms ease;
+}
+.workspace-switch:hover {
+    background: #334155;
+    color: #e2e8f0;
+}
+.workspace-switch-active {
+    border-color: rgba(16, 185, 129, 0.35);
+    background: rgba(16, 185, 129, 0.1);
+    color: #34d399;
+}
+
+/* Tactical Map controls */
+.tactical-select {
+    width: 100%;
+    background: #0f172a;
+    color: #e2e8f0;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 7px 9px;
+    font-size: 12px;
+    outline: none;
+}
+.tactical-select:focus {
+    border-color: #10b981;
+}
+
+.tactical-card {
+    border: 1px solid #1e293b;
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: 10px;
+    padding: 9px;
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: 150ms ease;
+}
+.tactical-card:hover {
+    background: #1e293b;
+}
+.tactical-card-active {
+    border-color: rgba(16, 185, 129, 0.45);
+    background: rgba(16, 185, 129, 0.08);
+    color: #f8fafc;
+}
+
+.tactical-mini-btn,
+.tactical-tool-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border: 1px solid #334155;
+    background: #1e293b;
+    color: #cbd5e1;
+    border-radius: 7px;
+    padding: 5px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    transition: 150ms ease;
+}
+.tactical-mini-btn:hover,
+.tactical-tool-btn:hover {
+    background: #334155;
+    color: #f1f5f9;
+}
+.tactical-tool-active {
+    border-color: rgba(16, 185, 129, 0.5);
+    background: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+}
+
+/* Tactical points rendered over Leaflet */
+.tactical-leaflet-icon {
+    background: transparent !important;
+    border: 0 !important;
+}
+.tactical-point-marker {
+    position: relative;
+    width: 32px;
+    height: 32px;
+}
+.tactical-point-symbol {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: white;
+    background: var(--tactical-color, #64748b);
+    border: 3px solid #f8fafc;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.7);
+}
+.tactical-point-label {
+    position: absolute;
+    left: 38px;
+    top: 6px;
+    width: max-content;
+    max-width: 200px;
+    padding: 3px 7px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    background: rgba(15, 23, 42, 0.9);
+    color: #f1f5f9;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+}
