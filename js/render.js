@@ -1,5 +1,13 @@
 
 function renderAll() {
+    if (appWorkspace === 'tactical') {
+        renderTacticalAll();
+        return;
+    }
+
+    const workspaceTitle = document.getElementById('workspace-title');
+    if (workspaceTitle) workspaceTitle.innerText = 'Route Map Navigator Pro';
+
     // Update Active Route Badge
     document.getElementById('active-route-badge').innerText = currentRouteName;
 
@@ -8,6 +16,7 @@ function renderAll() {
 
     // Update Opacity Preview Bar
     renderOpacityPreviewBar();
+    updateFastNavigationButtons();
 
     // Update Progress Slider
     const range = document.getElementById('progress-range');
@@ -46,10 +55,6 @@ function renderAll() {
         let p1 = [ (p0[0] + p2[0]) / 2, (p0[1] + p2[1]) / 2 ];
         if (startStep.controlLat !== null && startStep.controlLng !== null) {
             p1 = [startStep.controlLat, startStep.controlLng];
-        } else {
-            // Store initial midpoint reference
-            startStep.controlLat = p1[0];
-            startStep.controlLng = p1[1];
         }
 
         const opStart = calculateStepOpacity(i);
@@ -424,7 +429,6 @@ function renderStepBanner() {
         badge.innerText = 'T - 0';
         titleEl.innerText = 'Aucune étape créée';
         noteEl.innerText = 'Cliquez sur la carte ou ouvrez les paramètres.';
-        updateMediaSession();
         return;
     }
 
@@ -432,5 +436,4 @@ function renderStepBanner() {
     badge.innerText = `T - ${currentStepIndex + 1}`;
     titleEl.innerText = current.title + (current.hasZone ? ' (Zone de fouille active)' : '');
     noteEl.innerText = current.note ? `Note : ${current.note}` : 'Aucune note particulière';
-    updateMediaSession();
 }

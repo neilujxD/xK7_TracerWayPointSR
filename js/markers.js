@@ -4,18 +4,46 @@ let markerLayerDefs = [];   // { id, label, color, count }
 
 let markerLoadToken = 0;
 
-let markerPointsFlat = [];   // [{id, color, lat, lng}] à plat, pour retrouver le type d'un point donné
+let markerPointsFlat = [];   // [{id, color, lat, lng}] à plat, pour affichage et recherche
+let markerSpatialIndex = new Map();
+const MARKER_INDEX_CELL = 32;
 let poiIconLayer = null;     // pictogrammes affichés uniquement en zoom rapproché, dans la vue actuelle
 
 
 // Cherche le repère (plume, TP, donjon...) le plus proche d'une position donnée.
 // Renvoie {id, color} si un repère se trouve à moins de BADGE_SNAP_PX pixels-carte, sinon null.
+function markerCellKey(lat, lng) {
+    return `${Math.floor(lat / MARKER_INDEX_CELL)}:${Math.floor(lng / MARKER_INDEX_CELL)}`;
+}
+
+
+function indexMarkerPoint(point) {
+    const key = markerCellKey(point.lat, point.lng);
+    if (!markerSpatialIndex.has(key)) markerSpatialIndex.set(key, []);
+    markerSpatialIndex.get(key).push(point);
+}
+
+
 function findMarkerBadgeForStep(lat, lng) {
-    let best = null, bestDist = BADGE_SNAP_PX;
-    for (const p of markerPointsFlat) {
-        const d = Math.hypot(p.lat - lat, p.lng - lng);
-        if (d <= bestDist) { bestDist = d; best = p; }
+    let best = null;
+    let bestDist = BADGE_SNAP_PX;
+    const row = Math.floor(lat / MARKER_INDEX_CELL);
+    const col = Math.floor(lng / MARKER_INDEX_CELL);
+
+    // BADGE_SNAP_PX est bien inférieur à la taille d'une cellule : 3x3 cellules suffisent.
+    for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+            const bucket = markerSpatialIndex.get(`${row + dr}:${col + dc}`) || [];
+            for (const point of bucket) {
+                const distance = Math.hypot(point.lat - lat, point.lng - lng);
+                if (distance <= bestDist) {
+                    bestDist = distance;
+                    best = point;
+                }
+            }
+        }
     }
+
     return best ? { id: best.id, color: best.color } : null;
 }
 
@@ -48,8 +76,15 @@ function refreshPoiIcons() {
 }
 
 
+function currentWorkspaceMapPath() {
+    if (appWorkspace === 'tactical' && tacticalStrategy && tacticalStrategy.map) {
+        return tacticalStrategy.map;
+    }
+    return settings.mapImagePath || '';
+}
+
 function currentMapBase() {
-    const file = (settings.mapImagePath || '').split('/').pop() || '';
+    const file = currentWorkspaceMapPath().split('/').pop() || '';
     return file.replace(/\.[^.]+$/, '');
 }
 
@@ -60,6 +95,7 @@ async function loadMarkersForCurrentMap() {
     markerGroups = {};
     markerLayerDefs = [];
     markerPointsFlat = [];
+    markerSpatialIndex = new Map();
 
     const base = currentMapBase();
     let data = null;
@@ -99,7 +135,9 @@ async function loadMarkersForCurrentMap() {
                 // En mode édition : un clic sur un repère place l'étape pile dessus
                 dot.on('click', () => { if (currentMode === 'edit') addStep(lat, lng, name); });
                 group.addLayer(dot);
-                markerPointsFlat.push({ id: layer.id, color, lat, lng });
+                const indexedPoint = { id: layer.id, color, lat, lng };
+                markerPointsFlat.push(indexedPoint);
+                indexMarkerPoint(indexedPoint);
                 count++;
             });
             markerGroups[layer.id] = group;

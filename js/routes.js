@@ -53,64 +53,19 @@ function applyQuestRangeFromForm() {
 
 
 
-// Signature comparable d'une liste d'étapes (pour détecter une modification locale)
+// Signature comparable d'une liste d'étapes (inclut les données de quête et TP)
 function stepsSignature(list) {
-    return JSON.stringify((list || []).map(t => [t.lat, t.lng, t.title, t.note,
-        t.controlLat, t.controlLng, !!t.hasZone, t.zoneRadius]));
+    return RouteCore.stepsSignature(list);
 }
 
 
-// Valide et nettoie les données d'un fichier (ancien format ou nouveau)
+// Valide, migre et nettoie les données d'un fichier (ancien format ou V2)
 function normalizeRoute(data, fallbackName) {
-    const rawSteps = Array.isArray(data) ? data : (data && Array.isArray(data.steps) ? data.steps : null);
-    if (!rawSteps) throw new Error('format');
-    const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
-    const cleanSteps = [];
-    rawSteps.forEach(t => {
-        if (!t) return;
-        const lat = num(t.lat), lng = num(t.lng);
-        if (lat === null || lng === null) return;
-        const cLat = num(t.controlLat), cLng = num(t.controlLng);
-        const hasCtrl = cLat !== null && cLng !== null;
-        cleanSteps.push({
-            id: Date.now() + Math.random(),
-            lat, lng,
-            title: String(t.title ?? '').slice(0, 120),
-            note: String(t.note ?? '').slice(0, 500),
-            controlLat: hasCtrl ? cLat : null,
-            controlLng: hasCtrl ? cLng : null,
-            hasZone: !!t.hasZone,
-            zoneRadius: Math.min(1000, Math.max(50, parseInt(t.zoneRadius, 10) || 250)),
-            // Quête suivie + téléportation : absents d'un ancien fichier -> valeurs par défaut
-            questMain: t.questMain === undefined ? true : !!t.questMain,
-            questSide: !!t.questSide,
-            tpNext: !!t.tpNext,
-            tpActivate: !!t.tpActivate
-        });
+    return RouteCore.normalizeRouteData(data, {
+        fallbackName,
+        mapsDir: MAPS_DIR,
+        settingsDefaults: settings
     });
-
-    const obj = (data && !Array.isArray(data)) ? data : {};
-    const name = String(obj.name || obj.routeName || fallbackName || `Imported_${Date.now()}`).trim().slice(0, 80)
-        || `Imported_${Date.now()}`;
-
-    // Carte associée (on n'accepte que des chemins dans images/maps/)
-    let map = obj.map || (obj.settings && obj.settings.mapImagePath) || null;
-    if (typeof map !== 'string' || !map.startsWith(MAPS_DIR) || map.includes('..')) map = null;
-
-    // Réglages d'opacité (facultatifs)
-    let opacity = null;
-    if (obj.settings && typeof obj.settings === 'object') {
-        const clamp = (v, def) => {
-            const n = parseInt(v, 10);
-            return isNaN(n) ? def : Math.min(10, Math.max(0, n));
-        };
-        opacity = {
-            maxPastSteps: clamp(obj.settings.maxPastSteps, settings.maxPastSteps),
-            maxFutureSteps: clamp(obj.settings.maxFutureSteps, settings.maxFutureSteps),
-            hideOutOfScope: !!obj.settings.hideOutOfScope
-        };
-    }
-    return { name, steps: cleanSteps, map, opacity };
 }
 
 
@@ -164,17 +119,12 @@ function applyRouteLive(route) {
 
 // Télécharge l'itinéraire courant : étapes + carte + réglages d'opacité
 function exportJSON() {
-    const data = {
-        version: 1,
-        name: currentRouteName,
-        map: settings.mapImagePath || null,
-        settings: {
-            maxPastSteps: settings.maxPastSteps,
-            maxFutureSteps: settings.maxFutureSteps,
-            hideOutOfScope: settings.hideOutOfScope
-        },
-        steps: steps
-    };
+    const data = RouteCore.exportRouteData(
+        currentRouteName,
+        steps,
+        settings.mapImagePath || null,
+        settings
+    );
     const slug = currentRouteName.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'itineraire';
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });

@@ -97,22 +97,25 @@ function initLeafletMap() {
         map.setMaxZoom(maxZoom);
         poiIconZoomThreshold = fitZoom + 1.5;   // pictogrammes visibles une fois nettement zoomé
 
-        // Restore saved camera position if available
-        const savedCenter = localStorage.getItem('route_planner_map_center');
-        const savedZoom = localStorage.getItem('route_planner_map_zoom');
-
-        if (savedCenter && savedZoom) {
+        // Restore an independent camera for Route Map and Tactical Map.
+        let savedView = null;
+        if (appWorkspace === 'tactical') {
+            savedView = tacticalSavedMapView();
+        } else {
             try {
-                const center = JSON.parse(savedCenter);
-                const zoom = parseFloat(savedZoom);
-                if (Array.isArray(center) && center.length === 2 && !isNaN(center[0]) && !isNaN(center[1]) && !isNaN(zoom)) {
-                    map.setView(center, Math.max(minZoom, Math.min(maxZoom, zoom)));
-                } else {
-                    map.fitBounds(mapImageBounds);
+                const center = JSON.parse(localStorage.getItem('route_planner_map_center') || 'null');
+                const zoom = Number.parseFloat(localStorage.getItem('route_planner_map_zoom'));
+                if (Array.isArray(center) && center.length === 2
+                    && Number.isFinite(center[0]) && Number.isFinite(center[1]) && Number.isFinite(zoom)) {
+                    savedView = { center, zoom };
                 }
-            } catch(e) {
-                map.fitBounds(mapImageBounds);
+            } catch (error) {
+                savedView = null;
             }
+        }
+
+        if (savedView) {
+            map.setView(savedView.center, Math.max(minZoom, Math.min(maxZoom, savedView.zoom)));
         } else {
             map.fitBounds(mapImageBounds);
         }
@@ -157,16 +160,24 @@ function initLeafletMap() {
         img.onerror();
     }
 
-    // Map Click -> Add Step
+    // Map Click -> route editing or tactical editing depending on workspace.
     map.on('click', function(e) {
-        if (currentMode === 'edit') {
+        if (appWorkspace === 'tactical') {
+            tacticalHandleMapClick(e.latlng.lat, e.latlng.lng);
+        } else if (currentMode === 'edit') {
             addStep(e.latlng.lat, e.latlng.lng);
         }
     });
 
     // Save map position on move/zoom
-    map.on('moveend', saveStateToLocalStorage);
-    map.on('zoomend', saveStateToLocalStorage);
+    map.on('moveend', saveWorkspaceMapView);
+    map.on('zoomend', saveWorkspaceMapView);
+}
+
+
+function renumberAutomaticStepTitles() {
+    steps = RouteCore.withRenumberedAutomaticTitles(steps);
+    routePresets[currentRouteName] = steps;
 }
 
 
@@ -194,6 +205,7 @@ function addStep(lat, lng, title = '', note = '') {
     };
 
     steps.push(newStep);
+    renumberAutomaticStepTitles();
 
     if (steps.length === 1) {
         currentStepIndex = 0;
@@ -216,7 +228,7 @@ function insertStepAfter(afterIndex, lat, lng) {
     const newStep = {
         id: Date.now() + Math.random(),
         lat, lng,
-        title: '', note: '',
+        title: `Étape ${afterIndex + 2}`, note: '',
         controlLat: null, controlLng: null,
         hasZone: false, zoneRadius: 250,
         questMain: true,
@@ -224,6 +236,7 @@ function insertStepAfter(afterIndex, lat, lng) {
         tpNext: false, tpActivate: false
     };
     steps.splice(afterIndex + 1, 0, newStep);
+    renumberAutomaticStepTitles();
     // La courbe qui partait de `afterIndex` visait l'ancienne étape suivante : on la laisse
     // se recalculer vers la nouvelle étape insérée.
     if (steps[afterIndex]) { steps[afterIndex].controlLat = null; steps[afterIndex].controlLng = null; }
@@ -248,6 +261,7 @@ function moveStep(index, lat, lng) {
 function removeStep(index, event) {
     if (event) event.stopPropagation();
     steps.splice(index, 1);
+    renumberAutomaticStepTitles();
     // L'étape précédente est maintenant reliée à une autre : on recalcule sa courbe
     if (index > 0 && steps[index - 1]) {
         steps[index - 1].controlLat = null;
@@ -318,6 +332,16 @@ function calculateStepOpacity(index) {
     const delta = index - currentStepIndex;
 
     if (delta === 0) return 1.0; // Current step T0
+
+    const carryActive = navigationCarryRange
+        && navigationCarryRange.target === currentStepIndex
+        && navigationCarryRange.end === currentStepIndex - 1;
+
+    if (carryActive && index >= navigationCarryRange.start && index <= navigationCarryRange.end) {
+        const count = Math.max(1, navigationCarryRange.end - navigationCarryRange.start + 1);
+        const position = index - navigationCarryRange.start;
+        return count === 1 ? 0.7 : 0.35 + (position / (count - 1)) * 0.4;
+    }
 
     if (delta < 0) { // Past steps T - x
         const pastDist = Math.abs(delta);

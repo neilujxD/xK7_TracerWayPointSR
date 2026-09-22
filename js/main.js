@@ -4,11 +4,13 @@ function setupKeyboardShortcuts() {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
         if (e.key === 'ArrowLeft') {
-            prevStep();
+            if (appWorkspace === 'tactical' && tacticalMode === 'present') tacticalStepPhase(-1);
+            else if (appWorkspace === 'route') prevStep();
         } else if (e.key === 'ArrowRight') {
-            nextStep();
+            if (appWorkspace === 'tactical' && tacticalMode === 'present') tacticalStepPhase(1);
+            else if (appWorkspace === 'route') nextStep();
         } else if (e.key.toLowerCase() === 's') {
-            openSettingsModal();
+            workspaceSettings();
         }
     });
 }
@@ -18,6 +20,8 @@ window.onload = async function() {
     loadStateFromLocalStorage();
     await Promise.all([scanMapsFolder(), scanRoutesFolder()]);
     resolveCurrentMap();
+    routeWorkspaceMapPath = settings.mapImagePath || '';
+    loadTacticalState();
     const wantedRoute = new URLSearchParams(location.search).get('route');
     if (wantedRoute) {
         try {
