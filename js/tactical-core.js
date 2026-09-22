@@ -9,7 +9,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
 
-    const VERSION = 1;
+    const VERSION = 2;
     const GROUP_PALETTE = Object.freeze([
         '#ef4444', '#3b82f6', '#22c55e', '#eab308',
         '#a855f7', '#f97316', '#06b6d4', '#ec4899'
@@ -26,6 +26,28 @@
 
     function id(prefix) {
         return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    }
+
+    function cleanNode(point) {
+        if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return null;
+        const controlLat = Number.isFinite(point.controlLat) ? point.controlLat : null;
+        const controlLng = Number.isFinite(point.controlLng) ? point.controlLng : null;
+        return {
+            lat: point.lat,
+            lng: point.lng,
+            controlLat: controlLat !== null && controlLng !== null ? controlLat : null,
+            controlLng: controlLat !== null && controlLng !== null ? controlLng : null
+        };
+    }
+
+    function normalizeTracks(rawPath) {
+        if (!Array.isArray(rawPath) || !rawPath.length) return [];
+
+        // Tactical V1 stored one flat path. V2 stores multiple independent tracks.
+        const tracks = Array.isArray(rawPath[0]) ? rawPath : [rawPath];
+        return tracks
+            .map(track => Array.isArray(track) ? track.map(cleanNode).filter(Boolean) : [])
+            .filter(track => track.length);
     }
 
     function createStrategy(name, mapPath) {
@@ -84,9 +106,7 @@
                     const rawPath = group && group.paths && Array.isArray(group.paths[phase.id])
                         ? group.paths[phase.id]
                         : [];
-                    paths[phase.id] = rawPath
-                        .filter(point => point && Number.isFinite(point.lat) && Number.isFinite(point.lng))
-                        .map(point => ({ lat: point.lat, lng: point.lng }));
+                    paths[phase.id] = normalizeTracks(rawPath);
                 });
                 return {
                     id: String(group && group.id || id('group')),
@@ -145,32 +165,80 @@
     function mixColors(colors) {
         if (!colors.length) return '#94a3b8';
         if (colors.length === 1) return colors[0];
+        if (colors.length >= 3) return '#050505';
         const rgbs = colors.map(hexToRgb);
-        return rgbToHex([0,1,2].map(channel => rgbs.reduce((sum, rgb) => sum + rgb[channel], 0) / rgbs.length));
+        return rgbToHex([0, 1, 2].map(channel =>
+            rgbs.reduce((sum, rgb) => sum + rgb[channel], 0) / rgbs.length
+        ));
     }
 
     function samePoint(a, b, tolerance) {
         const t = tolerance == null ? 4 : tolerance;
-        return Math.hypot(a.lat - b.lat, a.lng - b.lng) <= t;
+        return !!a && !!b && Math.hypot(a.lat - b.lat, a.lng - b.lng) <= t;
+    }
+
+    function allSegments(strategy, phaseId) {
+        const segments = [];
+        strategy.groups.forEach(group => {
+            const tracks = group.paths[phaseId] || [];
+            tracks.forEach((track, trackIndex) => {
+                for (let i = 0; i < track.length - 1; i++) {
+                    segments.push({
+                        group,
+                        trackIndex,
+                        index: i,
+                        a: track[i],
+                        b: track[i + 1]
+                    });
+                }
+            });
+        });
+        return segments;
     }
 
     function segmentOwners(strategy, phaseId, a, b, tolerance) {
-        return strategy.groups.filter(group => {
-            const path = group.paths[phaseId] || [];
-            for (let i = 0; i < path.length - 1; i++) {
-                const x = path[i], y = path[i + 1];
-                if ((samePoint(x, a, tolerance) && samePoint(y, b, tolerance))
-                    || (samePoint(x, b, tolerance) && samePoint(y, a, tolerance))) {
-                    return true;
-                }
+        const owners = new Map();
+        allSegments(strategy, phaseId).forEach(segment => {
+            if ((samePoint(segment.a, a, tolerance) && samePoint(segment.b, b, tolerance))
+                || (samePoint(segment.a, b, tolerance) && samePoint(segment.b, a, tolerance))) {
+                owners.set(segment.group.id, segment.group);
             }
-            return false;
         });
+        return [...owners.values()];
+    }
+
+    function tracksForGroup(group, phaseId) {
+        if (!Array.isArray(group.paths[phaseId])) group.paths[phaseId] = [];
+        return group.paths[phaseId];
+    }
+
+    function startTrack(group, phaseId, point) {
+        const node = cleanNode(point);
+        if (!node) return null;
+        const track = [node];
+        tracksForGroup(group, phaseId).push(track);
+        return track;
+    }
+
+    function lastTrack(group, phaseId) {
+        const tracks = tracksForGroup(group, phaseId);
+        return tracks.length ? tracks[tracks.length - 1] : null;
+    }
+
+    function ensureTrackAt(group, phaseId, point, tolerance) {
+        let track = lastTrack(group, phaseId);
+        const node = cleanNode(point);
+        if (!node) return null;
+        if (!track || !track.length || !samePoint(track[track.length - 1], node, tolerance || 0.1)) {
+            track = startTrack(group, phaseId, node);
+        }
+        return track;
     }
 
     return Object.freeze({
         VERSION, GROUP_PALETTE, POINT_TYPES,
         createStrategy, normalizeStrategy, addPhase, addGroup,
-        mixColors, samePoint, segmentOwners
+        mixColors, samePoint, allSegments, segmentOwners,
+        tracksForGroup, startTrack, lastTrack, ensureTrackAt
     });
 });
