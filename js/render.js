@@ -46,10 +46,6 @@ function renderAll() {
         let p1 = [ (p0[0] + p2[0]) / 2, (p0[1] + p2[1]) / 2 ];
         if (startStep.controlLat !== null && startStep.controlLng !== null) {
             p1 = [startStep.controlLat, startStep.controlLng];
-        } else {
-            // Store initial midpoint reference
-            startStep.controlLat = p1[0];
-            startStep.controlLng = p1[1];
         }
 
         const opStart = calculateStepOpacity(i);
