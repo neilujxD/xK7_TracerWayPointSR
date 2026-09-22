@@ -34,19 +34,24 @@
         }
     </script>
 
-    <link rel="stylesheet" href="css/style.css?v=20260922-2350">
+    <link rel="stylesheet" href="css/style.css?v=20260923-tactical1">
 </head>
 <body class="bg-slate-950 text-slate-100 h-full flex flex-col overflow-hidden font-sans antialiased select-none">
 
     <!-- Top Navigation / Control Bar -->
     <header class="h-14 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between z-20 shrink-0">
         <div class="flex items-center space-x-3">
-            <div class="bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20 text-emerald-400">
-                <i data-lucide="route" class="w-5 h-5"></i>
+            <div class="flex items-center space-x-1">
+                <button id="workspace-route-btn" onclick="switchWorkspace('route')" class="workspace-switch workspace-switch-active" title="Mode Itinéraire">
+                    <i data-lucide="route" class="w-5 h-5"></i>
+                </button>
+                <button id="workspace-tactical-btn" onclick="switchWorkspace('tactical')" class="workspace-switch" title="Tactical Map">
+                    <i data-lucide="shield" class="w-5 h-5"></i>
+                </button>
             </div>
             <div>
                 <div class="flex items-center space-x-2">
-                    <h1 class="font-bold text-sm leading-none text-slate-100">Route Map Navigator Pro</h1>
+                    <h1 id="workspace-title" class="font-bold text-sm leading-none text-slate-100">Route Map Navigator Pro</h1>
                     <span id="active-route-badge" class="bg-emerald-500/20 text-emerald-400 text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/30 truncate max-w-[150px]">
                         Itinéraire 1
                     </span>
@@ -55,8 +60,8 @@
             </div>
         </div>
 
-        <!-- Mode Toggle Switch -->
-        <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+        <!-- Route workspace controls -->
+        <div id="route-mode-controls" class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
             <button id="mode-edit-btn" onclick="setMode('edit')" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 bg-emerald-600 text-white shadow-lg">
                 <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                 <span>Édition (Tracé & Courbes)</span>
@@ -67,9 +72,21 @@
             </button>
         </div>
 
+        <!-- Tactical workspace controls -->
+        <div id="tactical-mode-controls" class="hidden flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button id="tactical-mode-edit" onclick="setTacticalMode('edit')" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white shadow-lg">
+                <i data-lucide="pencil-ruler" class="w-3.5 h-3.5"></i>
+                <span>Édition tactique</span>
+            </button>
+            <button id="tactical-mode-present" onclick="setTacticalMode('present')" class="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200">
+                <i data-lucide="presentation" class="w-3.5 h-3.5"></i>
+                <span>Présentation</span>
+            </button>
+        </div>
+
         <!-- Top Right Actions & Settings -->
         <div class="flex items-center space-x-2">
-            <button onclick="exportJSON()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg font-medium transition border border-slate-700 flex items-center space-x-1" title="Sauvegarder l'itinéraire courant (fichier .json avec carte et réglages)">
+            <button onclick="workspaceSave()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg font-medium transition border border-slate-700 flex items-center space-x-1" title="Sauvegarder l'itinéraire courant (fichier .json avec carte et réglages)">
                 <i data-lucide="save" class="w-3.5 h-3.5"></i>
                 <span class="hidden sm:inline">Sauvegarder</span>
             </button>
@@ -77,11 +94,11 @@
             <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-2.5 py-1.5 rounded-lg font-medium transition border border-slate-700 flex items-center space-x-1" title="Ouvrir un fichier itinéraire (.json)">
                 <i data-lucide="upload" class="w-3.5 h-3.5"></i>
                 <span class="hidden sm:inline">Ouvrir</span>
-                <input type="file" id="json-loader" accept=".json" class="hidden" onchange="importJSON(event)">
+                <input type="file" id="json-loader" accept=".json" class="hidden" onchange="workspaceImport(event)">
             </label>
 
             <!-- Gear Settings Button -->
-            <button onclick="openSettingsModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-md flex items-center space-x-1.5" title="Paramètres">
+            <button onclick="workspaceSettings()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-md flex items-center space-x-1.5" title="Paramètres">
                 <i data-lucide="settings" class="w-4 h-4"></i>
                 <span>Paramètres</span>
             </button>
@@ -91,7 +108,7 @@
     <div class="flex-1 flex relative overflow-hidden">
 
         <!-- Sidebar / Steps Panel -->
-        <aside id="sidebar" class="w-88 bg-slate-900/95 backdrop-blur border-r border-slate-800 flex flex-col z-10 transition-all duration-300">
+        <aside id="route-sidebar" class="w-88 bg-slate-900/95 backdrop-blur border-r border-slate-800 flex flex-col z-10 transition-all duration-300">
             <!-- Sidebar Header -->
             <div class="p-3 border-b border-slate-800 flex items-center justify-between">
                 <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center space-x-1">
@@ -118,12 +135,27 @@
             </div>
         </aside>
 
+        <!-- Tactical Map Sidebar -->
+        <aside id="tactical-sidebar" class="hidden w-96 bg-slate-900/95 backdrop-blur border-r border-slate-800 flex flex-col z-10">
+            <div class="p-3 border-b border-slate-800 flex items-center justify-between">
+                <div>
+                    <div class="text-xs font-bold text-slate-100">Plan tactique</div>
+                    <div class="text-[10px] text-slate-500">Phases · Groupes · Points tactiques</div>
+                </div>
+                <button onclick="tacticalNewStrategy()" class="tactical-mini-btn" title="Nouvelle stratégie">
+                    <i data-lucide="file-plus-2" class="w-3.5 h-3.5"></i>
+                    <span>Nouveau</span>
+                </button>
+            </div>
+            <div id="tactical-sidebar-content" class="flex-1 flex flex-col min-h-0 overflow-y-auto"></div>
+        </aside>
+
         <!-- Map Canvas Viewport -->
         <main class="flex-1 relative bg-slate-950">
             <div id="map" class="w-full h-full"></div>
 
             <!-- Floating Navigation Controls at Bottom -->
-            <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-[500] w-full max-w-xl px-4 pointer-events-none">
+            <div id="route-bottom-controls" class="absolute bottom-6 left-1/2 -translate-x-1/2 z-[500] w-full max-w-xl px-4 pointer-events-none">
                 <div class="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl p-3 pointer-events-auto flex flex-col space-y-2">
                     
                     <!-- Navigation Step Info -->
@@ -172,8 +204,31 @@
                 </div>
             </div>
 
+            <!-- Tactical presentation / focus controls -->
+            <div id="tactical-bottom-controls" class="hidden absolute bottom-6 left-1/2 -translate-x-1/2 z-[500] w-full max-w-2xl px-4 pointer-events-none">
+                <div class="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl p-3 pointer-events-auto flex items-center gap-2">
+                    <button onclick="tacticalStepPhase(-1)" class="bg-slate-800 hover:bg-slate-700 text-slate-100 p-2.5 rounded-xl border border-slate-700" title="Phase précédente">
+                        <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                    </button>
+                    <div class="min-w-0 flex-1 px-2">
+                        <div class="text-[10px] uppercase tracking-wider text-slate-500">Phase active</div>
+                        <div id="tactical-phase-label" class="text-sm font-semibold text-slate-100 truncate">Phase 1</div>
+                    </div>
+                    <div class="hidden sm:block min-w-0 flex-1 px-2 border-l border-slate-800">
+                        <div class="text-[10px] uppercase tracking-wider text-slate-500">Groupe actif</div>
+                        <div id="tactical-group-label" class="text-sm font-semibold text-slate-100 truncate">Groupe Rouge</div>
+                    </div>
+                    <select id="tactical-focus-select" onchange="tacticalFocusGroup(this.value)" class="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+                        <option value="all">Vue globale</option>
+                    </select>
+                    <button onclick="tacticalStepPhase(1)" class="bg-slate-800 hover:bg-slate-700 text-slate-100 p-2.5 rounded-xl border border-slate-700" title="Phase suivante">
+                        <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
             <!-- Key Shortcuts Overlay -->
-            <div class="absolute top-3 right-3 z-[500] bg-slate-900/80 backdrop-blur px-3 py-1.5 rounded-lg border border-slate-800 text-[11px] text-slate-400 flex items-center space-x-2 pointer-events-none">
+            <div id="route-shortcuts" class="absolute top-3 right-3 z-[500] bg-slate-900/80 backdrop-blur px-3 py-1.5 rounded-lg border border-slate-800 text-[11px] text-slate-400 flex items-center space-x-2 pointer-events-none">
                 <i data-lucide="keyboard" class="w-3.5 h-3.5 text-slate-500"></i>
                 <span>Navigation : <kbd class="px-1 py-0.5 bg-slate-800 rounded text-slate-300 font-mono">←</kbd> / <kbd class="px-1 py-0.5 bg-slate-800 rounded text-slate-300 font-mono">→</kbd></span>
             </div>
@@ -366,17 +421,22 @@
         </div>
     </div>
 
-    <script src="js/config.js?v=20260922-2350"></script>
-    <script src="js/core.js?v=20260922-2350"></script>
-    <script src="js/state.js?v=20260922-2350"></script>
-    <script src="js/storage.js?v=20260922-2350"></script>
-    <script src="js/markers.js?v=20260922-2350"></script>
-    <script src="js/scan.js?v=20260922-2350"></script>
-    <script src="js/map.js?v=20260922-2350"></script>
-    <script src="js/render.js?v=20260922-2350"></script>
-    <script src="js/nav.js?v=20260922-2350"></script>
-    <script src="js/ui.js?v=20260922-2350"></script>
-    <script src="js/routes.js?v=20260922-2350"></script>
-    <script src="js/main.js?v=20260922-2350"></script>
+    <script src="js/config.js?v=20260923-tactical1"></script>
+    <script src="js/core.js?v=20260923-tactical1"></script>
+    <script src="js/tactical-core.js?v=20260923-tactical1"></script>
+    <script src="js/state.js?v=20260923-tactical1"></script>
+    <script src="js/tactical-state.js?v=20260923-tactical1"></script>
+    <script src="js/storage.js?v=20260923-tactical1"></script>
+    <script src="js/tactical-storage.js?v=20260923-tactical1"></script>
+    <script src="js/markers.js?v=20260923-tactical1"></script>
+    <script src="js/scan.js?v=20260923-tactical1"></script>
+    <script src="js/map.js?v=20260923-tactical1"></script>
+    <script src="js/render.js?v=20260923-tactical1"></script>
+    <script src="js/tactical-render.js?v=20260923-tactical1"></script>
+    <script src="js/nav.js?v=20260923-tactical1"></script>
+    <script src="js/ui.js?v=20260923-tactical1"></script>
+    <script src="js/tactical-ui.js?v=20260923-tactical1"></script>
+    <script src="js/routes.js?v=20260923-tactical1"></script>
+    <script src="js/main.js?v=20260923-tactical1"></script>
 </body>
 </html>
