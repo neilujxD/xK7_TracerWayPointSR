@@ -8,6 +8,7 @@ function renderAll() {
 
     // Update Opacity Preview Bar
     renderOpacityPreviewBar();
+    updateFastNavigationButtons();
 
     // Update Progress Slider
     const range = document.getElementById('progress-range');
