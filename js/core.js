@@ -81,9 +81,11 @@
 
         if (!rawSteps) throw new Error('Format d\'itinéraire invalide.');
 
-        const steps = rawSteps
-            .map((step, index) => normalizeStep(step, index))
-            .filter(Boolean);
+        const steps = withRenumberedAutomaticTitles(
+            rawSteps
+                .map((step, index) => normalizeStep(step, index))
+                .filter(Boolean)
+        );
 
         const source = data && !Array.isArray(data) ? data : {};
         const name = sanitizeRouteName(
