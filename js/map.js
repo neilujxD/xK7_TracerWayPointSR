@@ -328,6 +328,16 @@ function calculateStepOpacity(index) {
 
     if (delta === 0) return 1.0; // Current step T0
 
+    const carryActive = navigationCarryRange
+        && navigationCarryRange.target === currentStepIndex
+        && navigationCarryRange.end === currentStepIndex - 1;
+
+    if (carryActive && index >= navigationCarryRange.start && index <= navigationCarryRange.end) {
+        const count = Math.max(1, navigationCarryRange.end - navigationCarryRange.start + 1);
+        const position = index - navigationCarryRange.start;
+        return count === 1 ? 0.7 : 0.35 + (position / (count - 1)) * 0.4;
+    }
+
     if (delta < 0) { // Past steps T - x
         const pastDist = Math.abs(delta);
         if (pastDist <= settings.maxPastSteps) {
