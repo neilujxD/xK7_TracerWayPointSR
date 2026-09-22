@@ -31,7 +31,8 @@ function switchWorkspace(workspace) {
         : 'workspace-switch';
 
     if (workspace === 'tactical') {
-        if (!tacticalStrategy.map) tacticalStrategy.map = settings.mapImagePath || '';
+        routeWorkspaceMapPath = routeWorkspaceMapPath || settings.mapImagePath || '';
+        if (!tacticalStrategy.map) tacticalStrategy.map = routeWorkspaceMapPath;
         if (tacticalStrategy.map && tacticalStrategy.map !== settings.mapImagePath) {
             settings.mapImagePath = tacticalStrategy.map;
             currentImageUrl = toUrl(tacticalStrategy.map);
@@ -41,8 +42,14 @@ function switchWorkspace(workspace) {
         }
     } else {
         clearTacticalLayers();
-        if (settings.mapImagePath) currentImageUrl = toUrl(settings.mapImagePath);
-        renderAll();
+        const routeMap = routeWorkspaceMapPath || settings.mapImagePath;
+        if (routeMap && routeMap !== settings.mapImagePath) {
+            settings.mapImagePath = routeMap;
+            currentImageUrl = toUrl(routeMap);
+            initLeafletMap();
+        } else {
+            renderAll();
+        }
     }
     if (window.lucide) lucide.createIcons();
 }
