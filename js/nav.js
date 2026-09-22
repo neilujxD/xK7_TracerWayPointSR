@@ -4,8 +4,10 @@ function clearNavigationCarry() {
 
 
 function fastJumpSize() {
-    const value = Number.parseInt(settings.maxFutureSteps, 10);
-    return Number.isFinite(value) ? Math.max(0, value) : 0;
+    const future = Number.parseInt(settings.maxFutureSteps, 10);
+    if (!Number.isFinite(future)) return 1;
+    // T+x compte les étapes futures, auxquelles s'ajoute T0 : T+3 = bloc de 4 étapes.
+    return Math.max(1, future + 1);
 }
 
 
@@ -21,13 +23,13 @@ function updateFastNavigationButtons() {
 
     [prev, next].forEach(button => {
         if (!button) return;
-        button.disabled = amount === 0 || steps.length === 0;
+        button.disabled = steps.length === 0;
         button.classList.toggle('opacity-40', button.disabled);
         button.classList.toggle('cursor-not-allowed', button.disabled);
     });
 
-    if (prev) prev.title = amount ? `Reculer de ${amount} étape(s) (selon T+x)` : 'Saut rapide désactivé : T+x = 0';
-    if (next) next.title = amount ? `Avancer de ${amount} étape(s) (selon T+x)` : 'Saut rapide désactivé : T+x = 0';
+    if (prev) prev.title = `Reculer d'un bloc de ${amount} étape(s) (T0 + T+x)`;
+    if (next) next.title = `Avancer d'un bloc de ${amount} étape(s) (T0 + T+x)`;
 }
 
 
