@@ -85,3 +85,73 @@ test('automatic titles are renumbered while custom titles are preserved', () => 
     assert.equal(route.steps[2].title, 'Étape 3');
     assert.equal(route.steps[3].title, 'Prendre le TP');
 });
+
+
+const TacticalCore = require('../js/tactical-core.js');
+
+test('tactical strategies keep independent group paths for each phase', () => {
+    const strategy = TacticalCore.createStrategy('War plan', 'images/maps/Altgard.webp');
+    const phase2 = TacticalCore.addPhase(strategy, 'Engagement');
+    const blue = TacticalCore.addGroup(strategy, 'Groupe Bleu', '#3b82f6');
+
+    strategy.groups[0].paths[phase2.id].push({ lat: 10, lng: 20 });
+    blue.paths[phase2.id].push({ lat: 30, lng: 40 });
+
+    assert.equal(strategy.groups[0].paths[phase2.id].length, 1);
+    assert.equal(blue.paths[phase2.id].length, 1);
+    assert.notDeepEqual(strategy.groups[0].paths[phase2.id], blue.paths[phase2.id]);
+});
+
+test('shared tactical segments report all owning groups', () => {
+    const strategy = TacticalCore.createStrategy('Shared', '');
+    const phaseId = strategy.phases[0].id;
+    const red = strategy.groups[0];
+    const blue = TacticalCore.addGroup(strategy, 'Bleu', '#3b82f6');
+    red.paths[phaseId] = [{ lat: 1, lng: 1 }, { lat: 2, lng: 2 }];
+    blue.paths[phaseId] = [{ lat: 1, lng: 1 }, { lat: 2, lng: 2 }];
+
+    const owners = TacticalCore.segmentOwners(
+        strategy, phaseId,
+        { lat: 1, lng: 1 }, { lat: 2, lng: 2 }, 0.1
+    );
+
+    assert.deepEqual(owners.map(group => group.id).sort(), [red.id, blue.id].sort());
+});
+
+test('shared tactical group colors are mixed deterministically', () => {
+    assert.equal(TacticalCore.mixColors(['#ff0000', '#0000ff']), '#800080');
+});
+
+test('tactical normalization removes invalid path points and memberships', () => {
+    const strategy = TacticalCore.createStrategy('Normalize', '');
+    const group = strategy.groups[0];
+    const phase = strategy.phases[0];
+    const normalized = TacticalCore.normalizeStrategy({
+        name: 'Imported',
+        map: 'images/maps/Altgard.webp',
+        phases: [phase],
+        groups: [{
+            id: group.id,
+            name: group.name,
+            color: group.color,
+            paths: {
+                [phase.id]: [
+                    { lat: 10, lng: 20 },
+                    { lat: 'bad', lng: 20 }
+                ]
+            }
+        }],
+        points: [{
+            id: 'p1',
+            type: 'engage',
+            label: 'Combat',
+            lat: 5,
+            lng: 6,
+            phaseId: phase.id,
+            groupIds: [group.id, 'missing']
+        }]
+    }, '');
+
+    assert.equal(normalized.groups[0].paths[phase.id].length, 1);
+    assert.deepEqual(normalized.points[0].groupIds, [group.id]);
+});
