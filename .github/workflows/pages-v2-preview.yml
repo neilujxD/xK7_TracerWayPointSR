@@ -60,4 +60,5 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-# Trigger after Pages source switch
+
+# Redeploy V2 preview after feature update
