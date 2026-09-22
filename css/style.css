@@ -1,0 +1,71 @@
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+        background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #334155;
+        border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #475569;
+    }
+
+    /* Map styling */
+    #map {
+        background-color: #090d16;
+        cursor: crosshair;
+    }
+
+    /* Custom SVG Marker Animation */
+    .active-step-ping {
+        animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+    @keyframes ping {
+        75%, 100% {
+            transform: scale(1.8);
+            opacity: 0;
+        }
+    }
+
+    /* Search zone pulsing effect */
+    .search-zone-pulse {
+        animation: zonePulse 2s ease-in-out infinite alternate;
+    }
+    @keyframes zonePulse {
+        0% { stroke-dashoffset: 0; }
+        100% { stroke-dashoffset: 20; }
+    }
+
+    /* Leaflet customization */
+    .leaflet-container {
+        font-family: inherit;
+    }
+    .leaflet-bar {
+        border: none !important;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5) !important;
+    }
+    .leaflet-bar a {
+        background-color: #1e293b !important;
+        color: #f8fafc !important;
+        border-bottom: 1px solid #334155 !important;
+    }
+    .leaflet-bar a:hover {
+        background-color: #334155 !important;
+    }
+
+    /* Bézier Handle styling */
+    .bezier-handle-icon {
+        background-color: #f59e0b;
+        border: 2px solid #ffffff;
+        border-radius: 50%;
+        box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
+        cursor: grab;
+    }
+    .bezier-handle-icon:active {
+        cursor: grabbing;
+        transform: scale(1.2);
+    }
