@@ -1,7 +1,66 @@
+function clearNavigationCarry() {
+    navigationCarryRange = null;
+}
+
+
+function fastJumpSize() {
+    const value = Number.parseInt(settings.maxFutureSteps, 10);
+    return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+
+function updateFastNavigationButtons() {
+    const amount = fastJumpSize();
+    const prev = document.getElementById('fast-prev-btn');
+    const next = document.getElementById('fast-next-btn');
+    const prevLabel = document.getElementById('fast-prev-label');
+    const nextLabel = document.getElementById('fast-next-label');
+
+    if (prevLabel) prevLabel.innerText = `-${amount}`;
+    if (nextLabel) nextLabel.innerText = `+${amount}`;
+
+    [prev, next].forEach(button => {
+        if (!button) return;
+        button.disabled = amount === 0 || steps.length === 0;
+        button.classList.toggle('opacity-40', button.disabled);
+        button.classList.toggle('cursor-not-allowed', button.disabled);
+    });
+
+    if (prev) prev.title = amount ? `Reculer de ${amount} étape(s) (selon T+x)` : 'Saut rapide désactivé : T+x = 0';
+    if (next) next.title = amount ? `Avancer de ${amount} étape(s) (selon T+x)` : 'Saut rapide désactivé : T+x = 0';
+}
+
+
+function jumpByFutureWindow(direction) {
+    if (!steps.length || currentStepIndex < 0) return;
+
+    const amount = fastJumpSize();
+    if (amount <= 0) return;
+
+    const previous = currentStepIndex;
+    const target = Math.max(0, Math.min(steps.length - 1, previous + direction * amount));
+    if (target === previous) return;
+
+    if (direction > 0) {
+        navigationCarryRange = {
+            start: previous,
+            end: target - 1,
+            target
+        };
+    } else {
+        navigationCarryRange = null;
+    }
+
+    currentStepIndex = target;
+    saveStateToLocalStorage();
+    renderAll();
+}
+
 
 function prevStep() {
     if (steps.length === 0) return;
     if (currentStepIndex > 0) {
+        clearNavigationCarry();
         currentStepIndex--;
         saveStateToLocalStorage();
         renderAll();
@@ -12,6 +71,7 @@ function prevStep() {
 function nextStep() {
     if (steps.length === 0) return;
     if (currentStepIndex < steps.length - 1) {
+        clearNavigationCarry();
         currentStepIndex++;
         saveStateToLocalStorage();
         renderAll();
@@ -20,6 +80,7 @@ function nextStep() {
 
 
 function onSliderChange(val) {
+    clearNavigationCarry();
     currentStepIndex = parseInt(val, 10);
     saveStateToLocalStorage();
     renderAll();
