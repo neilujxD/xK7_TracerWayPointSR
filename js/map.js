@@ -170,6 +170,12 @@ function initLeafletMap() {
 }
 
 
+function renumberAutomaticStepTitles() {
+    steps = RouteCore.withRenumberedAutomaticTitles(steps);
+    routePresets[currentRouteName] = steps;
+}
+
+
 function addStep(lat, lng, title = '', note = '') {
     const stepNumber = steps.length + 1;
     const newStep = {
@@ -194,6 +200,7 @@ function addStep(lat, lng, title = '', note = '') {
     };
 
     steps.push(newStep);
+    renumberAutomaticStepTitles();
 
     if (steps.length === 1) {
         currentStepIndex = 0;
@@ -216,7 +223,7 @@ function insertStepAfter(afterIndex, lat, lng) {
     const newStep = {
         id: Date.now() + Math.random(),
         lat, lng,
-        title: '', note: '',
+        title: `Étape ${afterIndex + 2}`, note: '',
         controlLat: null, controlLng: null,
         hasZone: false, zoneRadius: 250,
         questMain: true,
@@ -224,6 +231,7 @@ function insertStepAfter(afterIndex, lat, lng) {
         tpNext: false, tpActivate: false
     };
     steps.splice(afterIndex + 1, 0, newStep);
+    renumberAutomaticStepTitles();
     // La courbe qui partait de `afterIndex` visait l'ancienne étape suivante : on la laisse
     // se recalculer vers la nouvelle étape insérée.
     if (steps[afterIndex]) { steps[afterIndex].controlLat = null; steps[afterIndex].controlLng = null; }
@@ -248,6 +256,7 @@ function moveStep(index, lat, lng) {
 function removeStep(index, event) {
     if (event) event.stopPropagation();
     steps.splice(index, 1);
+    renumberAutomaticStepTitles();
     // L'étape précédente est maintenant reliée à une autre : on recalcule sa courbe
     if (index > 0 && steps[index - 1]) {
         steps[index - 1].controlLat = null;
