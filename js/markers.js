@@ -76,8 +76,15 @@ function refreshPoiIcons() {
 }
 
 
+function currentWorkspaceMapPath() {
+    if (appWorkspace === 'tactical' && tacticalStrategy && tacticalStrategy.map) {
+        return tacticalStrategy.map;
+    }
+    return settings.mapImagePath || '';
+}
+
 function currentMapBase() {
-    const file = (settings.mapImagePath || '').split('/').pop() || '';
+    const file = currentWorkspaceMapPath().split('/').pop() || '';
     return file.replace(/\.[^.]+$/, '');
 }
 
