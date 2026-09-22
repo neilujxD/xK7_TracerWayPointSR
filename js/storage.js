@@ -96,7 +96,7 @@ function saveStateToLocalStorage() {
         localStorage.setItem(STORAGE_KEYS.activeRoute, currentRouteName);
         localStorage.setItem(STORAGE_KEYS.stepIndex, String(currentStepIndex));
 
-        if (isMapReady && map) {
+        if (appWorkspace === 'route' && isMapReady && map) {
             const center = map.getCenter();
             const zoom = map.getZoom();
             if (center && Number.isFinite(center.lat) && Number.isFinite(center.lng) && Number.isFinite(zoom)) {
@@ -106,5 +106,14 @@ function saveStateToLocalStorage() {
         }
     } catch (error) {
         console.warn('Erreur lors de la sauvegarde dans localStorage', error);
+    }
+}
+
+
+function saveWorkspaceMapView() {
+    if (appWorkspace === 'tactical') {
+        saveTacticalMapView();
+    } else {
+        saveStateToLocalStorage();
     }
 }
