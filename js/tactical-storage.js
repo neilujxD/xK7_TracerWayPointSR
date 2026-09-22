@@ -38,3 +38,36 @@ function saveTacticalState() {
         console.warn('Impossible de sauvegarder la stratégie tactique.', error);
     }
 }
+
+
+const TACTICAL_MAP_CENTER_KEY = 'route_planner_tactical_map_center';
+const TACTICAL_MAP_ZOOM_KEY = 'route_planner_tactical_map_zoom';
+
+function saveTacticalMapView() {
+    try {
+        saveTacticalState();
+        if (!isMapReady || !map) return;
+        const center = map.getCenter();
+        const zoom = map.getZoom();
+        if (center && Number.isFinite(center.lat) && Number.isFinite(center.lng) && Number.isFinite(zoom)) {
+            localStorage.setItem(TACTICAL_MAP_CENTER_KEY, JSON.stringify([center.lat, center.lng]));
+            localStorage.setItem(TACTICAL_MAP_ZOOM_KEY, String(zoom));
+        }
+    } catch (error) {
+        console.warn('Impossible de sauvegarder la vue tactique.', error);
+    }
+}
+
+function tacticalSavedMapView() {
+    try {
+        const center = JSON.parse(localStorage.getItem(TACTICAL_MAP_CENTER_KEY) || 'null');
+        const zoom = Number.parseFloat(localStorage.getItem(TACTICAL_MAP_ZOOM_KEY));
+        if (Array.isArray(center) && center.length === 2
+            && Number.isFinite(center[0]) && Number.isFinite(center[1]) && Number.isFinite(zoom)) {
+            return { center, zoom };
+        }
+    } catch (error) {
+        return null;
+    }
+    return null;
+}
