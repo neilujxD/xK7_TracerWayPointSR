@@ -157,9 +157,11 @@ function initLeafletMap() {
         img.onerror();
     }
 
-    // Map Click -> Add Step
+    // Map Click -> route editing or tactical editing depending on workspace.
     map.on('click', function(e) {
-        if (currentMode === 'edit') {
+        if (appWorkspace === 'tactical') {
+            tacticalHandleMapClick(e.latlng.lat, e.latlng.lng);
+        } else if (currentMode === 'edit') {
             addStep(e.latlng.lat, e.latlng.lng);
         }
     });
