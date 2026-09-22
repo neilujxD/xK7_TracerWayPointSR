@@ -112,6 +112,16 @@
         };
     }
 
+    function withRenumberedAutomaticTitles(list) {
+        return (Array.isArray(list) ? list : []).map((step, index) => {
+            if (!step || typeof step !== 'object') return step;
+            const title = String(step.title ?? '').trim();
+            const isAutomatic = title === '' || /^Étape\s+\d+$/i.test(title);
+            return isAutomatic ? { ...step, title: `Étape ${index + 1}` } : step;
+        });
+    }
+
+
     function comparableStep(step) {
         return [
             step.lat,
@@ -151,6 +161,7 @@
         ROUTE_SCHEMA_VERSION,
         normalizeStep,
         normalizeRouteData,
+        withRenumberedAutomaticTitles,
         stepsSignature,
         exportRouteData,
         isSafeMapPath,
