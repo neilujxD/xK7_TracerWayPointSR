@@ -97,22 +97,25 @@ function initLeafletMap() {
         map.setMaxZoom(maxZoom);
         poiIconZoomThreshold = fitZoom + 1.5;   // pictogrammes visibles une fois nettement zoomé
 
-        // Restore saved camera position if available
-        const savedCenter = localStorage.getItem('route_planner_map_center');
-        const savedZoom = localStorage.getItem('route_planner_map_zoom');
-
-        if (savedCenter && savedZoom) {
+        // Restore an independent camera for Route Map and Tactical Map.
+        let savedView = null;
+        if (appWorkspace === 'tactical') {
+            savedView = tacticalSavedMapView();
+        } else {
             try {
-                const center = JSON.parse(savedCenter);
-                const zoom = parseFloat(savedZoom);
-                if (Array.isArray(center) && center.length === 2 && !isNaN(center[0]) && !isNaN(center[1]) && !isNaN(zoom)) {
-                    map.setView(center, Math.max(minZoom, Math.min(maxZoom, zoom)));
-                } else {
-                    map.fitBounds(mapImageBounds);
+                const center = JSON.parse(localStorage.getItem('route_planner_map_center') || 'null');
+                const zoom = Number.parseFloat(localStorage.getItem('route_planner_map_zoom'));
+                if (Array.isArray(center) && center.length === 2
+                    && Number.isFinite(center[0]) && Number.isFinite(center[1]) && Number.isFinite(zoom)) {
+                    savedView = { center, zoom };
                 }
-            } catch(e) {
-                map.fitBounds(mapImageBounds);
+            } catch (error) {
+                savedView = null;
             }
+        }
+
+        if (savedView) {
+            map.setView(savedView.center, Math.max(minZoom, Math.min(maxZoom, savedView.zoom)));
         } else {
             map.fitBounds(mapImageBounds);
         }
@@ -167,8 +170,8 @@ function initLeafletMap() {
     });
 
     // Save map position on move/zoom
-    map.on('moveend', saveStateToLocalStorage);
-    map.on('zoomend', saveStateToLocalStorage);
+    map.on('moveend', saveWorkspaceMapView);
+    map.on('zoomend', saveWorkspaceMapView);
 }
 
 
