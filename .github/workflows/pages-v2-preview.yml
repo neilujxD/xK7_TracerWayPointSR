@@ -61,4 +61,4 @@ jobs:
         uses: actions/deploy-pages@v4
 
 
-# Deploy Tactical Map V2 preview
+# Deploy Tactical Map contextual interactions
