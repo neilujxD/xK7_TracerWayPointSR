@@ -138,16 +138,12 @@
                             </div>
                         </div>
 
-                        <!-- Boutons de droite : touches globales + auto-focus -->
+                        <!-- Bouton de droite : auto-focus -->
                         <div class="flex items-center space-x-2 shrink-0">
-                            <button id="gamekeys-toggle" onclick="toggleGlobalKeys()" class="bg-slate-800 border border-slate-700 text-slate-400 p-1.5 rounded-lg text-xs flex items-center space-x-1 hover:bg-slate-700 transition shrink-0" title="Touches multimédia Suivant / Précédent actives même quand le jeu a le focus">
-                                <i data-lucide="gamepad-2" class="w-4 h-4"></i>
-                                <span id="gamekeys-label" class="text-[11px] font-medium hidden sm:inline">Touches jeu</span>
-                            </button>
                             <button id="autocenter-toggle" onclick="toggleAutoCenter()" class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-1.5 rounded-lg text-xs flex items-center space-x-1 hover:bg-emerald-500/20 transition shrink-0" title="Recentrer automatiquement sur l'étape">
-                            <i data-lucide="crosshair" class="w-4 h-4"></i>
-                            <span class="text-[11px] font-medium hidden sm:inline">Auto-focus</span>
-                        </button>
+                                <i data-lucide="crosshair" class="w-4 h-4"></i>
+                                <span class="text-[11px] font-medium hidden sm:inline">Auto-focus</span>
+                            </button>
                         </div>
                     </div>
 
@@ -361,12 +357,13 @@
     </div>
 
     <script src="js/config.js"></script>
+    <script src="js/core.js"></script>
     <script src="js/state.js"></script>
+    <script src="js/storage.js"></script>
     <script src="js/markers.js"></script>
     <script src="js/scan.js"></script>
     <script src="js/map.js"></script>
     <script src="js/render.js"></script>
-    <script src="js/gamekeys.js"></script>
     <script src="js/nav.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/routes.js"></script>
