@@ -61,7 +61,10 @@ function populateMapPresets(filterText) {
         const option = document.createElement('option');
         option.value = MAPS_DIR + name;
         option.innerText = friendlyMapName(name);
-        if (option.value === settings.mapImagePath) option.selected = true;
+        const selectedMap = appWorkspace === 'tactical'
+            ? (tacticalStrategy.map || settings.mapImagePath)
+            : settings.mapImagePath;
+        if (option.value === selectedMap) option.selected = true;
         selector.appendChild(option);
     });
     status.innerText = q
@@ -78,11 +81,24 @@ async function refreshMapList() {
 
 
 function selectMapFromPreset(path) {
-    if (!path || path === settings.mapImagePath) return;
+    if (!path) return;
+
+    if (appWorkspace === 'tactical') {
+        if (path === tacticalStrategy.map) return;
+        tacticalStrategy.map = path;
+        currentImageUrl = toUrl(path);
+        localStorage.removeItem('route_planner_tactical_map_center');
+        localStorage.removeItem('route_planner_tactical_map_zoom');
+        saveTacticalState();
+        initLeafletMap();
+        return;
+    }
+
+    if (path === settings.mapImagePath) return;
     settings.mapImagePath = path;
+    routeWorkspaceMapPath = path;
     currentImageUrl = toUrl(path);
     saveStateToLocalStorage();
-    // Nouvelle carte = nouvelle vue (on oublie la position de la précédente)
     localStorage.removeItem('route_planner_map_center');
     localStorage.removeItem('route_planner_map_zoom');
     initLeafletMap();
